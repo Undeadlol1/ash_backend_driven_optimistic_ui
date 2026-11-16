@@ -278,4 +278,31 @@ defmodule AshBackendDrivenOptimisticUi.JsonLogicTest do
                [false, false, false, false, false, true, true, true]
     end
   end
+
+  @fixtures ["json_logic_official_tests.json", "json_logic_extras_tests.json"]
+
+  describe "GIVEN the official JSON Logic suite and our extras" do
+    test "WHEN every case is evaluated THEN each one gives its expected result" do
+      failures =
+        for file <- @fixtures,
+            case_ <- file |> fixture_cases() |> Enum.reject(&is_binary/1),
+            not passes?(case_),
+            do: {file, case_}
+
+      assert failures == [], "failing cases:\n#{Enum.map_join(failures, "\n", &inspect/1)}"
+    end
+  end
+
+  defp fixture_cases(file) do
+    "test/fixtures"
+    |> Path.join(file)
+    |> File.read!()
+    |> Jason.decode!()
+  end
+
+  defp passes?([rule, data, expected]) do
+    JsonLogic.run(rule, data) == expected
+  rescue
+    _error -> false
+  end
 end
