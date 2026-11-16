@@ -324,6 +324,19 @@ No client is published yet. One needs:
 - the two steps above: apply and remember, then settle when the real
   data arrives.
 
+Which custom operations a client meets depends on the rules:
+
+- `has` and `to_string` appear in rules whose author never wrote them. The
+  library puts `has` into every update rule, once per field the action
+  accepts, and wraps every part of a `<>` join in `to_string`. Add these
+  two first.
+- `round`, `abs` and `now` appear only when a rule's author writes them.
+
+When a client cannot run a rule, for example because an operation is
+missing or a value is not a number, it should show nothing early for that
+action and log the rule's name. The save still goes to the server and the
+real data arrives as usual, so the user only loses the instant update.
+
 ## What is written once
 
 Optimistic UI usually means writing every rule twice: once on the server,
