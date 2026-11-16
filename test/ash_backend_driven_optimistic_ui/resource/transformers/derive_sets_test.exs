@@ -170,7 +170,7 @@ defmodule AshBackendDrivenOptimisticUi.Resource.Transformers.DeriveSetsTest do
                    }
                  },
                  %{
-                   "where" => %{">=" => [input(:xp_amount), record(:xp_to_next_level)]},
+                   "where" => %{">=" => [%{"+" => [input(:xp_amount)]}, %{"+" => [record(:xp_to_next_level)]}]},
                    "effects" => [
                      %{
                        "set" => %{"current_level" => %{"+" => [record(:current_level), 1]}},

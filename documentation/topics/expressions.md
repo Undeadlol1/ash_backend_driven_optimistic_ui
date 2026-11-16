@@ -31,18 +31,29 @@ resource.
 | You write | The client runs |
 | --- | --- |
 | `+ - * /`, unary `-` | the same |
-| `== != < > <= >=` | the same |
-| `a <> b` | `cat` (nested ones become one) |
+| `== !=` | the same |
+| `< > <= >=` | the same, each side that is not a number literal cast to a number with `+` |
+| `a <> b` | `cat` (nested ones become one), each part that is not a text literal wrapped in `to_string` |
 | `x in list` | `in` |
 | `and`, `or`, `not` | `and`, `or`, `!` |
 | `if(cond, then: a, else: b)` | `if` |
 | `is_nil(x)` | `x == nil` |
-| `abs(x)`, `round(x)`, `round(x, places)`, `to_string(x)`, `now()` | custom operators the client must implement |
+| `abs(x)`, `round(x)`, `round(x, places)`, `to_string(x)`, `now()` | custom operations the client must add |
 | `has_arg(:name)` | custom operator `has` |
 
-`abs`, `round`, `to_string`, `now` and `has` are not standard JSON Logic. A
-client that evaluates rules has to implement them; `now` is the current UTC
-time as ISO 8601 text. Any other function, such as `contains` or `today()`,
+Everything else is standard JSON Logic. `abs`, `round`, `to_string`, `now`
+and `has` are the five custom operations; a client that evaluates rules
+has to add them (see "What a client needs" in
+[How it works](how-it-works.md)). `now` is the current UTC time as ISO 8601
+text.
+
+Two rules of the translator keep Ash behaviour on a standard evaluator.
+Compared values are cast to numbers with `+`, because Ash sends decimals as
+text and standard JSON Logic would compare two texts as text (`"10.5"` would
+be smaller than `"9"`). Joined values are wrapped in `to_string`, because
+standard `cat` prints an empty value as `null` and you expect nothing.
+
+Any other function, such as `contains` or `today()`,
 fails compilation.
 
 Decimals become floats in the rule. Atoms become strings.

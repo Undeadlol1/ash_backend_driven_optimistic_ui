@@ -15,26 +15,34 @@ defmodule AshBackendDrivenOptimisticUi.CompilerTest do
       assert Compiler.compile(expr(a / 2)) == {:ok, %{"/" => [record(:a), 2]}}
       assert Compiler.compile(expr(a == 1)) == {:ok, %{"==" => [record(:a), 1]}}
       assert Compiler.compile(expr(a != 1)) == {:ok, %{"!=" => [record(:a), 1]}}
-      assert Compiler.compile(expr(a < 1)) == {:ok, %{"<" => [record(:a), 1]}}
-      assert Compiler.compile(expr(a > 1)) == {:ok, %{">" => [record(:a), 1]}}
-      assert Compiler.compile(expr(a <= 1)) == {:ok, %{"<=" => [record(:a), 1]}}
-      assert Compiler.compile(expr(a >= 1)) == {:ok, %{">=" => [record(:a), 1]}}
+      assert Compiler.compile(expr(a < 1)) == {:ok, %{"<" => [%{"+" => [record(:a)]}, 1]}}
+      assert Compiler.compile(expr(a > 1)) == {:ok, %{">" => [%{"+" => [record(:a)]}, 1]}}
+      assert Compiler.compile(expr(a <= 1)) == {:ok, %{"<=" => [%{"+" => [record(:a)]}, 1]}}
+      assert Compiler.compile(expr(a >= 1)) == {:ok, %{">=" => [%{"+" => [record(:a)]}, 1]}}
     end
 
     test "THEN unary minus keeps its single operand" do
       assert Compiler.compile(expr(-a)) == {:ok, %{"-" => [record(:a)]}}
     end
 
-    test "THEN string concatenation becomes cat" do
-      assert Compiler.compile(expr(a <> "!")) == {:ok, %{"cat" => [record(:a), "!"]}}
+    test "THEN string concatenation becomes cat with each non-literal operand as text" do
+      assert Compiler.compile(expr(a <> "!")) ==
+               {:ok, %{"cat" => [%{"to_string" => [record(:a)]}, "!"]}}
+    end
+
+    test "THEN a compared operand that is not a number literal is cast with unary plus" do
+      assert Compiler.compile(expr(a >= arg(:b))) ==
+               {:ok, %{">=" => [%{"+" => [record(:a)]}, %{"+" => [input(:b)]}]}}
+
+      assert Compiler.compile(expr(1 < a)) == {:ok, %{"<" => [1, %{"+" => [record(:a)]}]}}
     end
 
     test "THEN nested concatenation flattens into one cat list" do
       assert Compiler.compile(expr(a <> "-" <> b <> "!")) ==
-               {:ok, %{"cat" => [record(:a), "-", record(:b), "!"]}}
+               {:ok, %{"cat" => [%{"to_string" => [record(:a)]}, "-", %{"to_string" => [record(:b)]}, "!"]}}
 
       assert Compiler.compile(expr((a <> "-") <> b <> "!")) ==
-               {:ok, %{"cat" => [record(:a), "-", record(:b), "!"]}}
+               {:ok, %{"cat" => [%{"to_string" => [record(:a)]}, "-", %{"to_string" => [record(:b)]}, "!"]}}
     end
 
     test "THEN an event reads the pushed event's payload" do
@@ -55,8 +63,8 @@ defmodule AshBackendDrivenOptimisticUi.CompilerTest do
                {:ok,
                 %{
                   "and" => [
-                    %{">" => [record(:a), 1]},
-                    %{"<" => [record(:b), 2]},
+                    %{">" => [%{"+" => [record(:a)]}, 1]},
+                    %{"<" => [%{"+" => [record(:b)]}, 2]},
                     %{"==" => [record(:c), 3]}
                   ]
                 }}
@@ -80,7 +88,7 @@ defmodule AshBackendDrivenOptimisticUi.CompilerTest do
   describe "GIVEN the optimistic UI compiler WHEN a function the client can run is called" do
     test "THEN if with do and else keeps both branches" do
       assert Compiler.compile(expr(if a > 1, do: "big", else: "small")) ==
-               {:ok, %{"if" => [%{">" => [record(:a), 1]}, "big", "small"]}}
+               {:ok, %{"if" => [%{">" => [%{"+" => [record(:a)]}, 1]}, "big", "small"]}}
     end
 
     test "THEN if with do only falls back to nil" do

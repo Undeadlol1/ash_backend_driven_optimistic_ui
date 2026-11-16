@@ -303,12 +303,39 @@ with the record.
 
 No client is published yet. One needs:
 
-- a JSON Logic evaluator with four extra operators: `abs`, `round`,
-  `to_string`, and `has` (true when `input` has the key). The library's
-  Elixir evaluator, `AshBackendDrivenOptimisticUi.JsonLogic`, is the
-  reference; the test helpers use it;
+- a standard JSON Logic evaluator: any package that passes the official
+  tests at <https://jsonlogic.com/tests.json>, plus five small custom
+  operations added to it:
+  - `has`: `{"has": "input.name"}` returns true when the path's last key is
+    present, even with a null value;
+  - `round`: `round(x)` returns the nearest whole number, halves away from
+    zero; `round(x, places)` rounds to that many decimal places;
+  - `abs`: returns the absolute value of its one operand;
+  - `to_string`: returns its operand as text; null becomes empty text;
+  - `now`: takes no operands and returns the current UTC time as ISO 8601
+    text.
+
+  The library's Elixir evaluator, `AshBackendDrivenOptimisticUi.JsonLogic`,
+  is the reference; the test helpers use it. The repository's
+  `test/fixtures` hold two test files a client can run:
+  `json_logic_official_tests.json` (the official suite) and
+  `json_logic_extras_tests.json` (the custom operations and the places
+  where this library's evaluator is stricter than JavaScript);
 - the two steps above: apply and remember, then settle when the real
   data arrives.
+
+Which custom operations a client meets depends on the rules:
+
+- `has` and `to_string` appear in rules whose author never wrote them. The
+  library puts `has` into every update rule, once per field the action
+  accepts, and wraps every part of a `<>` join in `to_string`. Add these
+  two first.
+- `round`, `abs` and `now` appear only when a rule's author writes them.
+
+When a client cannot run a rule, for example because an operation is
+missing or a value is not a number, it should show nothing early for that
+action and log the rule's name. The save still goes to the server and the
+real data arrives as usual, so the user only loses the instant update.
 
 ## What is written once
 
@@ -357,7 +384,7 @@ the server sends as text (`"7"`) matches the number `7`. See
 ## Why the limits
 
 - The app runs the rule, so a rule can only use what JSON Logic and the
-  four extra operators can express.
+  five custom operations can express.
 - The app holds records, not their relationships or the actor, so a rule
   cannot read them. Use a calculation, an aggregate or `ctx`.
 - The library never guesses what a change module does. A change module

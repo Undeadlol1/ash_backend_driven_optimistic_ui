@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The evaluator now follows the full JSON Logic standard, checked by the official test suite. The translator casts compared values to numbers (`+`) and wraps joined values in `to_string`, so `<>` prints an empty value as nothing. A rule compares two texts as text only if written without the cast, which no Ash expression produces today.
 - `AshBackendDrivenOptimisticUi.RuleSet`: a ready Ash resource whose `:rules` action returns the rules. List it in a domain and your API layer serves it like any other action; no hand-written route.
 - `mix igniter.install ash_backend_driven_optimistic_ui` (and `mix ash_backend_driven_optimistic_ui.install`) does the
   setup: config and formatter import, then a notice names the two things the app sends to the client.

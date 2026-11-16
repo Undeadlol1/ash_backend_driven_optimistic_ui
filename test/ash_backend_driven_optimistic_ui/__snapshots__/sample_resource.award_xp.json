@@ -60,10 +60,18 @@
       "where": {
         ">=": [
           {
-            "var": "input.xp_amount"
+            "+": [
+              {
+                "var": "input.xp_amount"
+              }
+            ]
           },
           {
-            "var": "record.xp_to_next_level"
+            "+": [
+              {
+                "var": "record.xp_to_next_level"
+              }
+            ]
           }
         ]
       }

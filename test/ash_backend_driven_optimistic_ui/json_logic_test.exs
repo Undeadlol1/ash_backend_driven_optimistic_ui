@@ -1,6 +1,9 @@
 defmodule AshBackendDrivenOptimisticUi.JsonLogicTest do
   use ExUnit.Case, async: true
 
+  import Ash.Expr
+
+  alias AshBackendDrivenOptimisticUi.Compiler
   alias AshBackendDrivenOptimisticUi.JsonLogic
 
   @data %{
@@ -177,8 +180,8 @@ defmodule AshBackendDrivenOptimisticUi.JsonLogicTest do
       assert JsonLogic.run(%{">=" => ["3", 2]}, @data) == true
     end
 
-    test "WHEN two texts 10 and 9 are compared using less or equal THEN they compare as numbers" do
-      assert JsonLogic.run(%{"<=" => ["10", "9"]}, @data) == false
+    test "WHEN two texts 10 and 9 are compared using less or equal THEN they compare as text" do
+      assert JsonLogic.run(%{"<=" => ["10", "9"]}, @data) == true
     end
 
     test "WHEN a numeric text 10 is compared with the number 10 THEN they are equal" do
@@ -217,8 +220,8 @@ defmodule AshBackendDrivenOptimisticUi.JsonLogicTest do
       assert JsonLogic.run(%{"cat" => [0.5]}, @data) == "0.5"
     end
 
-    test "WHEN cat joins text, nil and text THEN nil adds nothing" do
-      assert JsonLogic.run(%{"cat" => ["a", nil, "b"]}, @data) == "ab"
+    test "WHEN cat joins text, nil and text THEN nil prints as null" do
+      assert JsonLogic.run(%{"cat" => ["a", nil, "b"]}, @data) == "anullb"
     end
 
     test "WHEN cat joins true and false THEN it joins them as the texts true and false" do
@@ -259,23 +262,80 @@ defmodule AshBackendDrivenOptimisticUi.JsonLogicTest do
       end
 
       assert_raise ArgumentError, ~r/Not a number/, fn ->
-        JsonLogic.run(%{"<" => ["a", "b"]}, @data)
+        JsonLogic.run(%{"max" => [1, "x"]}, @data)
+      end
+
+      assert_raise ArgumentError, ~r/Not a number/, fn ->
+        JsonLogic.run(%{"*" => [true, 2]}, @data)
       end
     end
 
-    test "WHEN the operator is unknown THEN it raises naming the operator" do
-      error = assert_raise ArgumentError, fn -> JsonLogic.run(%{"merge" => [1, 2]}, @data) end
+    test "WHEN two texts that are not numbers are ordered THEN they compare as text" do
+      assert JsonLogic.run(%{"<" => ["a", "b"]}, @data) == true
+    end
 
-      assert error.message =~ "merge"
+    test "WHEN a text that is not a number is ordered against a number THEN it is false" do
+      assert JsonLogic.run(%{">=" => ["a", 1]}, @data) == false
+    end
+
+    test "WHEN the operator is unknown THEN it raises naming the operator" do
+      error = assert_raise ArgumentError, fn -> JsonLogic.run(%{"frobnicate" => [1, 2]}, @data) end
+
+      assert error.message =~ "frobnicate"
     end
 
     test "WHEN a map holds more than one operator THEN it raises" do
       assert_raise ArgumentError, fn -> JsonLogic.run(%{"+" => [1], "-" => [1]}, @data) end
     end
 
+    test "WHEN dividing by zero with / or % THEN it raises" do
+      assert_raise ArgumentError, fn -> JsonLogic.run(%{"/" => [1, 0]}, @data) end
+      assert_raise ArgumentError, fn -> JsonLogic.run(%{"%" => [1, 0]}, @data) end
+    end
+
+    test "WHEN a compiled Ash comparison meets decimal strings THEN it compares them as numbers" do
+      {:ok, rule} = Compiler.compile(expr(balance >= arg(:amount)))
+      data = %{"record" => %{"balance" => "10.5"}, "input" => %{"amount" => "9"}}
+
+      assert JsonLogic.run(rule, data)
+    end
+
+    test "WHEN a compiled Ash concatenation meets a nil THEN the nil prints as nothing" do
+      {:ok, rule} = Compiler.compile(expr(title <> "!"))
+
+      assert JsonLogic.run(rule, %{"record" => %{"title" => nil}}) == "!"
+    end
+
     test "WHEN truthy? checks falsy and truthy values THEN only zero, empty text, empty list, nil and false are falsy" do
       assert Enum.map([0, "", [], nil, false, 1, "a", [0]], &JsonLogic.truthy?/1) ==
                [false, false, false, false, false, true, true, true]
     end
+  end
+
+  @fixtures ["json_logic_official_tests.json", "json_logic_extras_tests.json"]
+
+  describe "GIVEN the official JSON Logic suite and our extras" do
+    test "WHEN every case is evaluated THEN each one gives its expected result" do
+      failures =
+        for file <- @fixtures,
+            case_ <- file |> fixture_cases() |> Enum.reject(&is_binary/1),
+            not passes?(case_),
+            do: {file, case_}
+
+      assert failures == [], "failing cases:\n#{Enum.map_join(failures, "\n", &inspect/1)}"
+    end
+  end
+
+  defp fixture_cases(file) do
+    "test/fixtures"
+    |> Path.join(file)
+    |> File.read!()
+    |> Jason.decode!()
+  end
+
+  defp passes?([rule, data, expected]) do
+    JsonLogic.run(rule, data) == expected
+  rescue
+    _error -> false
   end
 end
