@@ -1,0 +1,39 @@
+{
+  "effects": [
+    {
+      "set": {
+        "title": {
+          "var": "input.title"
+        }
+      },
+      "source": "derived"
+    },
+    {
+      "set": {
+        "group_id": {
+          "var": "input.group_id"
+        }
+      },
+      "source": "derived"
+    },
+    {
+      "insert": {
+        "at": "end",
+        "into": [
+          {
+            "key": "groups",
+            "match": {
+              "id": {
+                "var": "input.group_id"
+              }
+            }
+          },
+          {
+            "key": "items"
+          }
+        ]
+      }
+    }
+  ],
+  "reactions": []
+}

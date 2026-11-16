@@ -1,0 +1,20 @@
+{
+  "effects": [
+    {
+      "set": {
+        "title": {
+          "var": "input.title"
+        }
+      },
+      "source": "derived"
+    },
+    {
+      "insert": {
+        "at": {
+          "sorted_by": "title"
+        }
+      }
+    }
+  ],
+  "reactions": []
+}

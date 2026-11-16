@@ -1,0 +1,32 @@
+{
+  "effects": [
+    {
+      "edit": {
+        "from": [
+          {
+            "key": "groups"
+          },
+          {
+            "key": "items"
+          }
+        ]
+      }
+    },
+    {
+      "effects": [
+        {
+          "set": {
+            "title": {
+              "var": "input.title"
+            }
+          },
+          "source": "declared"
+        }
+      ],
+      "where": {
+        "has": "input.title"
+      }
+    }
+  ],
+  "reactions": []
+}

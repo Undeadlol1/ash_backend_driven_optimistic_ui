@@ -1,0 +1,17 @@
+{
+  "effects": [
+    {
+      "remove": {
+        "from": [
+          {
+            "key": "groups"
+          },
+          {
+            "key": "items"
+          }
+        ]
+      }
+    }
+  ],
+  "reactions": []
+}

@@ -1,0 +1,68 @@
+{
+  "effects": [
+    {
+      "set": {
+        "balance": {
+          "-": [
+            {
+              "var": "record.balance"
+            },
+            {
+              "var": "input.amount"
+            }
+          ]
+        }
+      },
+      "source": "derived"
+    },
+    {
+      "push": {
+        "event": "tipped",
+        "payload": {
+          "amount": {
+            "var": "input.amount"
+          },
+          "id": {
+            "var": "ctx.push_ids.tipped.tip"
+          }
+        }
+      }
+    }
+  ],
+  "reactions": [
+    {
+      "effects": [
+        {
+          "set": {
+            "balance": {
+              "+": [
+                {
+                  "var": "record.balance"
+                },
+                {
+                  "var": "event.amount"
+                }
+              ]
+            }
+          },
+          "source": "declared"
+        },
+        {
+          "push": {
+            "event": "tip_received",
+            "payload": {
+              "amount": {
+                "var": "event.amount"
+              },
+              "id": {
+                "var": "ctx.push_ids.tip_received.tipped"
+              }
+            }
+          }
+        }
+      ],
+      "on": "tipped",
+      "type": "sample_resource"
+    }
+  ]
+}

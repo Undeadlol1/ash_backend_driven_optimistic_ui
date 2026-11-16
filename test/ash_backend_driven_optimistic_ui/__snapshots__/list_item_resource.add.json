@@ -1,0 +1,18 @@
+{
+  "effects": [
+    {
+      "set": {
+        "title": {
+          "var": "input.title"
+        }
+      },
+      "source": "derived"
+    },
+    {
+      "insert": {
+        "at": "start"
+      }
+    }
+  ],
+  "reactions": []
+}

@@ -1,0 +1,19 @@
+{
+  "effects": [
+    {
+      "set": {
+        "balance": {
+          "var": "input.balance"
+        }
+      },
+      "source": "derived"
+    },
+    {
+      "set": {
+        "current_level": 1
+      },
+      "source": "declared"
+    }
+  ],
+  "reactions": []
+}

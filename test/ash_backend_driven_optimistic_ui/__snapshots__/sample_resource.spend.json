@@ -1,0 +1,26 @@
+{
+  "effects": [
+    {
+      "set": {
+        "current_level": 1
+      },
+      "source": "derived"
+    },
+    {
+      "set": {
+        "balance": {
+          "-": [
+            {
+              "var": "record.balance"
+            },
+            {
+              "var": "input.cost"
+            }
+          ]
+        }
+      },
+      "source": "declared"
+    }
+  ],
+  "reactions": []
+}

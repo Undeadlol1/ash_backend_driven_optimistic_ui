@@ -1,0 +1,13 @@
+{
+  "effects": [
+    {
+      "set": {
+        "title": {
+          "var": "input.title"
+        }
+      },
+      "source": "declared"
+    }
+  ],
+  "reactions": []
+}

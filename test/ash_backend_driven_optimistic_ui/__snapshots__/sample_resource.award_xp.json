@@ -1,0 +1,93 @@
+{
+  "effects": [
+    {
+      "set": {
+        "total_xp": {
+          "+": [
+            {
+              "var": "record.total_xp"
+            },
+            {
+              "var": "input.xp_amount"
+            }
+          ]
+        }
+      },
+      "source": "derived"
+    },
+    {
+      "push": {
+        "event": "xp_awarded",
+        "payload": {
+          "id": {
+            "var": "ctx.push_ids.xp_awarded.award_xp"
+          },
+          "xp_amount": {
+            "var": "input.xp_amount"
+          }
+        }
+      }
+    },
+    {
+      "effects": [
+        {
+          "set": {
+            "current_level": {
+              "+": [
+                {
+                  "var": "record.current_level"
+                },
+                1
+              ]
+            }
+          },
+          "source": "declared"
+        },
+        {
+          "push": {
+            "event": "level_up",
+            "payload": {
+              "id": {
+                "var": "ctx.push_ids.level_up.award_xp"
+              },
+              "message": {
+                "var": "ctx.level_up_message"
+              }
+            }
+          }
+        }
+      ],
+      "where": {
+        ">=": [
+          {
+            "var": "input.xp_amount"
+          },
+          {
+            "var": "record.xp_to_next_level"
+          }
+        ]
+      }
+    }
+  ],
+  "reactions": [
+    {
+      "effects": [
+        {
+          "set": {
+            "balance": {
+              "+": [
+                {
+                  "var": "record.balance"
+                },
+                1
+              ]
+            }
+          },
+          "source": "declared"
+        }
+      ],
+      "on": "level_up",
+      "type": "sample_resource"
+    }
+  ]
+}

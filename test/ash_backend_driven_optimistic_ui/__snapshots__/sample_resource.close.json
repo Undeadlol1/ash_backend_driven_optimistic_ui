@@ -1,0 +1,18 @@
+{
+  "effects": [
+    {
+      "push": {
+        "event": "closed",
+        "payload": {
+          "balance": {
+            "var": "record.balance"
+          },
+          "id": {
+            "var": "ctx.push_ids.closed.close"
+          }
+        }
+      }
+    }
+  ],
+  "reactions": []
+}
