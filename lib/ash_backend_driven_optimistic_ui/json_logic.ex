@@ -74,7 +74,7 @@ defmodule AshBackendDrivenOptimisticUi.JsonLogic do
   defp evaluated("-", [value]), do: -number(value)
   defp evaluated("-", [left, right]), do: number(left) - number(right)
   defp evaluated("*", [_ | _] = values), do: values |> Enum.map(&number/1) |> Enum.reduce(&(&1 * &2))
-  defp evaluated("/", [left, right]), do: number(left) / number(right)
+  defp evaluated("/", [left, right]), do: divide(number(left), number(right))
   defp evaluated("%", [left, right]), do: remainder(number(left), number(right))
   defp evaluated("min", [_ | _] = values), do: values |> Enum.map(&number/1) |> Enum.min()
   defp evaluated("max", [_ | _] = values), do: values |> Enum.map(&number/1) |> Enum.max()
@@ -133,7 +133,7 @@ defmodule AshBackendDrivenOptimisticUi.JsonLogic do
   defp parse_number(value) when is_number(value), do: {:ok, value}
 
   defp parse_number(value) when is_binary(value) do
-    trimmed = String.trim(value)
+    trimmed = value |> String.trim() |> String.replace_prefix(".", "0.")
 
     case {Integer.parse(trimmed), Float.parse(trimmed)} do
       _empty when trimmed == "" -> {:ok, 0}
@@ -150,6 +150,10 @@ defmodule AshBackendDrivenOptimisticUi.JsonLogic do
   defp ordering_number(false), do: {:ok, 0}
   defp ordering_number(value), do: parse_number(value)
 
+  defp divide(_left, right) when right == 0, do: raise(ArgumentError, "division by zero")
+  defp divide(left, right), do: left / right
+
+  defp remainder(_left, right) when right == 0, do: raise(ArgumentError, "remainder by zero")
   defp remainder(left, right) when is_integer(left) and is_integer(right), do: rem(left, right)
   defp remainder(left, right), do: :math.fmod(left, right)
 
@@ -245,7 +249,7 @@ defmodule AshBackendDrivenOptimisticUi.JsonLogic do
 
   @doc "JSON Logic truthiness: everything but `false`, `nil`, `0`, `\"\"` and `[]`."
   @spec truthy?(term()) :: boolean()
-  def truthy?(value), do: value not in [false, nil, 0, "", []]
+  def truthy?(value), do: value not in [false, nil, 0, 0.0, "", []]
 
   defp text(nil), do: "null"
   defp text(value) when is_float(value) and value == trunc(value), do: Integer.to_string(trunc(value))

@@ -28,7 +28,7 @@ defmodule Mix.Tasks.OptimisticUi.ExplainTest do
                ~s(  push xp_awarded {"id":{"var":"ctx.push_ids.xp_awarded.award_xp"},"xp_amount":{"var":"input.xp_amount"}})
 
       assert text =~
-               ~s(  where {">=":[{"var":"input.xp_amount"},{"var":"record.xp_to_next_level"}]}\n    set)
+               ~s(  where {">=":[{"+":[{"var":"input.xp_amount"}]},{"+":[{"var":"record.xp_to_next_level"}]}]}\n    set)
     end
 
     test "WHEN a rule with reactions is rendered THEN the reactions are listed after the effects",

@@ -63,8 +63,8 @@ defmodule AshBackendDrivenOptimisticUi.CompilerTest do
                {:ok,
                 %{
                   "and" => [
-                    %{">" => [record(:a), 1]},
-                    %{"<" => [record(:b), 2]},
+                    %{">" => [%{"+" => [record(:a)]}, 1]},
+                    %{"<" => [%{"+" => [record(:b)]}, 2]},
                     %{"==" => [record(:c), 3]}
                   ]
                 }}
@@ -88,7 +88,7 @@ defmodule AshBackendDrivenOptimisticUi.CompilerTest do
   describe "GIVEN the optimistic UI compiler WHEN a function the client can run is called" do
     test "THEN if with do and else keeps both branches" do
       assert Compiler.compile(expr(if a > 1, do: "big", else: "small")) ==
-               {:ok, %{"if" => [%{">" => [record(:a), 1]}, "big", "small"]}}
+               {:ok, %{"if" => [%{">" => [%{"+" => [record(:a)]}, 1]}, "big", "small"]}}
     end
 
     test "THEN if with do only falls back to nil" do

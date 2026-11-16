@@ -14,6 +14,13 @@ defmodule AshBackendDrivenOptimisticUi.Compiler do
   key, even with a null value, so a rule can leave alone a field the caller
   did not send.
 
+  Every compared value that is not a number literal is cast to a number with
+  `+`, because Ash sends decimals as text and standard JSON Logic would
+  compare two such texts as text (`"10.5" >= "9"` is false). Every joined
+  value that is not a text literal is wrapped in `to_string`, because
+  standard `cat` prints an empty value as `null` and an Ash developer expects
+  nothing.
+
   Custom operators the client's evaluator implements on top of JSON Logic:
 
     * `abs` — `abs(x)`
@@ -46,6 +53,8 @@ defmodule AshBackendDrivenOptimisticUi.Compiler do
     in: "in"
   }
 
+  @comparisons [:<, :>, :<=, :>=]
+
   @custom_functions %{
     {:abs, 1} => "abs",
     {:round, 1} => "round",
@@ -59,7 +68,13 @@ defmodule AshBackendDrivenOptimisticUi.Compiler do
 
   @doc "Compiles `expression`, or names the first node the client cannot run."
   @spec compile(term()) :: {:ok, json_logic()} | {:error, {:unsupported, term()}}
-  def compile(%Call{name: :<>, args: [_, _]} = concatenation), do: operation("cat", flatten_cat(concatenation))
+  def compile(%Call{name: :<>, args: [_, _]} = concatenation) do
+    operation("cat", concatenation |> flatten_cat() |> Enum.map(&as_text/1))
+  end
+
+  def compile(%Call{name: name, args: args}) when name in @comparisons and length(args) == 2 do
+    operation(@operators[name], Enum.map(args, &as_number/1))
+  end
 
   def compile(%Call{name: name, args: args}) when is_map_key(@operators, name) and length(args) in [1, 2] do
     operation(@operators[name], args)
@@ -124,6 +139,12 @@ defmodule AshBackendDrivenOptimisticUi.Compiler do
       error -> error
     end
   end
+
+  defp as_number(operand) when is_number(operand) or is_struct(operand, Decimal), do: operand
+  defp as_number(operand), do: %Call{name: :+, args: [operand]}
+
+  defp as_text(operand) when is_binary(operand), do: operand
+  defp as_text(operand), do: %Call{name: :to_string, args: [operand]}
 
   defp flatten(%BooleanExpression{op: operator, left: left, right: right}, operator),
     do: flatten(left, operator) ++ flatten(right, operator)
