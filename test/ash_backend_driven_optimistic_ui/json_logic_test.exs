@@ -1,6 +1,9 @@
 defmodule AshBackendDrivenOptimisticUi.JsonLogicTest do
   use ExUnit.Case, async: true
 
+  import Ash.Expr
+
+  alias AshBackendDrivenOptimisticUi.Compiler
   alias AshBackendDrivenOptimisticUi.JsonLogic
 
   @data %{
@@ -283,6 +286,24 @@ defmodule AshBackendDrivenOptimisticUi.JsonLogicTest do
 
     test "WHEN a map holds more than one operator THEN it raises" do
       assert_raise ArgumentError, fn -> JsonLogic.run(%{"+" => [1], "-" => [1]}, @data) end
+    end
+
+    test "WHEN dividing by zero with / or % THEN it raises" do
+      assert_raise ArgumentError, fn -> JsonLogic.run(%{"/" => [1, 0]}, @data) end
+      assert_raise ArgumentError, fn -> JsonLogic.run(%{"%" => [1, 0]}, @data) end
+    end
+
+    test "WHEN a compiled Ash comparison meets decimal strings THEN it compares them as numbers" do
+      {:ok, rule} = Compiler.compile(expr(balance >= arg(:amount)))
+      data = %{"record" => %{"balance" => "10.5"}, "input" => %{"amount" => "9"}}
+
+      assert JsonLogic.run(rule, data)
+    end
+
+    test "WHEN a compiled Ash concatenation meets a nil THEN the nil prints as nothing" do
+      {:ok, rule} = Compiler.compile(expr(title <> "!"))
+
+      assert JsonLogic.run(rule, %{"record" => %{"title" => nil}}) == "!"
     end
 
     test "WHEN truthy? checks falsy and truthy values THEN only zero, empty text, empty list, nil and false are falsy" do
