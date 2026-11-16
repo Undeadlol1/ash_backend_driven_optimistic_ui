@@ -20,10 +20,9 @@ is published yet.
 
 ## Setup
 
-- It comes from GitHub; it is not on Hex yet:
-  `{:ash_backend_driven_optimistic_ui, github: "Undeadlol1/ash_backend_driven_optimistic_ui"}`.
-  With `igniter` in the deps, `mix ash_backend_driven_optimistic_ui.install` does the config,
-  formatter steps below (once on Hex: `mix igniter.install ash_backend_driven_optimistic_ui`).
+- Dependency: `{:ash_backend_driven_optimistic_ui, "~> 0.1"}`. With `igniter` in the
+  deps, `mix igniter.install ash_backend_driven_optimistic_ui` adds it and does the
+  config and formatter steps below.
 - Config: `config :ash_backend_driven_optimistic_ui, otp_app: :my_app, pubsub: MyApp.PubSub`.
   Rules are collected from `config :my_app, ash_domains: [...]`. `pubsub` is
   read only by `AshBackendDrivenOptimisticUi.Test`.

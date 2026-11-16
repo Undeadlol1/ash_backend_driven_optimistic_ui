@@ -76,29 +76,28 @@ already use, like any other action. One piece is left, described in
 
 ## Installation
 
-The library is not on Hex yet. Add it from GitHub (it needs
-`igniter` in your deps):
-
-```elixir
-{:ash_backend_driven_optimistic_ui, github: "Undeadlol1/ash_backend_driven_optimistic_ui"}
-```
-
-```bash
-mix deps.get
-mix ash_backend_driven_optimistic_ui.install
-```
-
-The install task writes the config and adds the formatter import. Running
-it twice changes nothing. It then prints what is left for you: the two
-things your app sends to the client.
-
-Once the library is on Hex, this one command will do all of it:
+With [Igniter](https://hexdocs.pm/igniter) in your deps, one command does
+it:
 
 ```bash
 mix igniter.install ash_backend_driven_optimistic_ui
 ```
 
+It adds the dependency, writes the config and adds the formatter import.
+Running it twice changes nothing. It then prints what is left for you: the
+two things your app sends to the client.
+
 ### By hand
+
+Add it to your deps:
+
+```elixir
+def deps do
+  [
+    {:ash_backend_driven_optimistic_ui, "~> 0.1"}
+  ]
+end
+```
 
 Add `import_deps: [:ash_backend_driven_optimistic_ui]` to your
 `.formatter.exs`, so the formatter leaves the rules without parentheses.
