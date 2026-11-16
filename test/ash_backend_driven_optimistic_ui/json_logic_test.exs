@@ -177,8 +177,8 @@ defmodule AshBackendDrivenOptimisticUi.JsonLogicTest do
       assert JsonLogic.run(%{">=" => ["3", 2]}, @data) == true
     end
 
-    test "WHEN two texts 10 and 9 are compared using less or equal THEN they compare as numbers" do
-      assert JsonLogic.run(%{"<=" => ["10", "9"]}, @data) == false
+    test "WHEN two texts 10 and 9 are compared using less or equal THEN they compare as text" do
+      assert JsonLogic.run(%{"<=" => ["10", "9"]}, @data) == true
     end
 
     test "WHEN a numeric text 10 is compared with the number 10 THEN they are equal" do
@@ -217,8 +217,8 @@ defmodule AshBackendDrivenOptimisticUi.JsonLogicTest do
       assert JsonLogic.run(%{"cat" => [0.5]}, @data) == "0.5"
     end
 
-    test "WHEN cat joins text, nil and text THEN nil adds nothing" do
-      assert JsonLogic.run(%{"cat" => ["a", nil, "b"]}, @data) == "ab"
+    test "WHEN cat joins text, nil and text THEN nil prints as null" do
+      assert JsonLogic.run(%{"cat" => ["a", nil, "b"]}, @data) == "anullb"
     end
 
     test "WHEN cat joins true and false THEN it joins them as the texts true and false" do
@@ -259,14 +259,26 @@ defmodule AshBackendDrivenOptimisticUi.JsonLogicTest do
       end
 
       assert_raise ArgumentError, ~r/Not a number/, fn ->
-        JsonLogic.run(%{"<" => ["a", "b"]}, @data)
+        JsonLogic.run(%{"max" => [1, "x"]}, @data)
+      end
+
+      assert_raise ArgumentError, ~r/Not a number/, fn ->
+        JsonLogic.run(%{"*" => [true, 2]}, @data)
       end
     end
 
-    test "WHEN the operator is unknown THEN it raises naming the operator" do
-      error = assert_raise ArgumentError, fn -> JsonLogic.run(%{"merge" => [1, 2]}, @data) end
+    test "WHEN two texts that are not numbers are ordered THEN they compare as text" do
+      assert JsonLogic.run(%{"<" => ["a", "b"]}, @data) == true
+    end
 
-      assert error.message =~ "merge"
+    test "WHEN a text that is not a number is ordered against a number THEN it is false" do
+      assert JsonLogic.run(%{">=" => ["a", 1]}, @data) == false
+    end
+
+    test "WHEN the operator is unknown THEN it raises naming the operator" do
+      error = assert_raise ArgumentError, fn -> JsonLogic.run(%{"frobnicate" => [1, 2]}, @data) end
+
+      assert error.message =~ "frobnicate"
     end
 
     test "WHEN a map holds more than one operator THEN it raises" do
