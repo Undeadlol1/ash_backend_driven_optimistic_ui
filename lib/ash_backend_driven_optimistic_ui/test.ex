@@ -15,7 +15,7 @@ defmodule AshBackendDrivenOptimisticUi.Test do
   evaluates the action's rule against the record and input, runs the real
   action, then fails unless every `set` of the rule equals the real record's
   value and every `push` of the rule was broadcast on one of `topics:` (its
-  `id`, when it has one, included). Options: `actor:`, `ctx:` (default `%{}`),
+  `id`, when it has one, included). Options: `actor:`, `ctx:`,
   `topics:` (default `[]`, which skips the push check) and `reacting:`
   (default `[]`), the records of other resources as the client holds them
   before the action. For each reaction of the rule that answers a type among

@@ -129,8 +129,9 @@ version changes.
 what was pushed and which guesses did not happen. Call
 `AshBackendDrivenOptimisticUi.PushCollector.open()` before the action. After
 it, call
-`AshBackendDrivenOptimisticUi.PushCollector.drain_reconciliation(optimistic_ids_the_client_sent)`
-and put the result in the answer. Whatever sends your pushes must call
+`AshBackendDrivenOptimisticUi.PushCollector.drain_reconciliation(header_values)`
+with the values of the request header the client sends its ids in (its name
+is `PushCollector.optimistic_ids_header/0`), and put the result in the answer. Whatever sends your pushes must call
 `AshBackendDrivenOptimisticUi.PushCollector.record/2` for each one.
 
 ## What your app needs
@@ -164,7 +165,7 @@ end
 ```
 
 You can often leave this out: simple changes on the action, and the fields
-a create accepts, are added to the rule for you.
+it accepts, are added to the rule for you.
 
 ### Show a toast at once
 
@@ -189,25 +190,8 @@ For actions whose result the app can't know in advance.
 More rules, with explanations, are in
 [Examples](documentation/topics/examples.md).
 
-## What you don't write twice
-
-- The fields a create accepts, and an action's `atomic_update` and
-  `set_attribute` changes, become the rule by themselves. You only write
-  what the action can't say.
-- A change module can say once what it does to the data. Every action
-  that uses it gets that `set`
-  ([example](documentation/topics/examples.md)).
-- A reaction is one block. "The user level adds the XP" is one
-  `on :xp_awarded`, and every rule that gives XP uses it.
-- The toast the app shows early and the one the server sends get their id
-  from the same function, so the app can tell they are the same.
-- One helper runs the real action and checks the rule against it. One
-  test with `assert_snapshots_current()` covers every rule's snapshot.
-
-You do write one thing twice: a `push` repeats the name and fields of the
-event your notifier sends. The test helper fails if the name, the id or a
-field doesn't match. Details:
-[What is written once](documentation/topics/how-it-works.md#what-is-written-once).
+One thing you still write twice, a `push`'s name and fields:
+[How it works](documentation/topics/how-it-works.md#what-is-still-written-twice).
 
 ## Limits
 

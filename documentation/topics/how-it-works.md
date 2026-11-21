@@ -3,21 +3,6 @@
 This page explains what happens between the user's tap and the server's
 answer. For what the library is for, start with the [README](readme.html).
 
-## Without this library
-
-```mermaid
-sequenceDiagram
-    participant App
-    participant Server
-    Note over App: User adds "Buy milk"
-    App->>Server: save "Buy milk"
-    Note over App: nothing on screen yet
-    Server-->>App: saved
-    App->>App: now the row appears
-```
-
-The user waits between the tap and the answer.
-
 ## The idea
 
 The server already tells the app about every change. After a todo is
@@ -88,41 +73,14 @@ action name, a `set` on something that is not an attribute, or an
 expression the app could not run (a relationship, the actor, an
 unsupported function) stops the compile.
 
-Simple changes on the action are turned into `set`s for you: the fields a
-create accepts, `atomic_update`, `set_attribute`, and change modules
+Simple changes on the action are turned into `set`s for you: the fields the
+action accepts, `atomic_update`, `set_attribute`, and change modules
 that describe themselves. See
 [What a rule may read](expressions.md#what-is-taken-from-the-action).
 
 `AshBackendDrivenOptimisticUi.Registry.rules()` collects every rule of
-every domain into one payload. For `:complete`:
-
-```json
-{
-  "version": "5c1e09ab77d3f240",
-  "rules": {
-    "todo.complete": {
-      "effects": [
-        {
-          "where": {"!": [{"var": "record.done"}]},
-          "effects": [
-            {"set": {"done": true}, "source": "declared"},
-            {"push": {"event": "xp_awarded", "payload": {
-              "amount": 10,
-              "id": {"var": "ctx.push_ids.xp_awarded.complete"}
-            }}}
-          ]
-        }
-      ],
-      "reactions": [
-        {"on": "xp_awarded", "type": "user_level", "effects": [
-          {"set": {"total_xp": {"+": [{"var": "record.total_xp"}, {"var": "event.amount"}]}},
-           "source": "declared"}
-        ]}
-      ]
-    }
-  }
-}
-```
+every domain into one payload. [On the wire](on-the-wire.md) shows the
+payload for `:complete`. In it:
 
 - A rule's key is `<type>.<action>`. The type is the resource's JSON:API
   type, or its module name underscored (`MyApp.UserLevel` is `user_level`).
@@ -337,35 +295,7 @@ missing or a value is not a number, it should show nothing early for that
 action and log the rule's name. The save still goes to the server and the
 real data arrives as usual, so the user only loses the instant update.
 
-## What is written once
-
-Optimistic UI usually means writing every rule twice: once on the server,
-once in the app. Here each piece has one home.
-
-| Piece | Written once in | Reused by |
-| --- | --- | --- |
-| What an action changes | the Ash action (`accept`, `atomic_update`, `set_attribute`), or the change module's `optimistic_sets/1` | the rule, which takes those changes as its `set`s |
-| What only the rule knows | the `optimistic` block, next to the action | every app, downloaded at start |
-| How another record reacts to an event | one `on :event` block on that record's resource | every rule that sends that event, attached automatically |
-| A fact the app can't work out | the resource's `ctx` calculation | every rule of that resource |
-| An event's id | `AshBackendDrivenOptimisticUi.PushId.for/3` | the rule (through `ctx`) and your notifier |
-| Whether a rule is right | the real action | the `optimistic` test helper, which compares the two |
-
-For example, XP. Completing a todo, finishing a workout and logging a
-meal can each `push :xp_awarded`. The user level's reaction is written
-once:
-
-```elixir
-# MyApp.UserLevel
-on :xp_awarded do
-  set :total_xp, expr(total_xp + event(:amount))
-end
-```
-
-`Registry.rules()` attaches it to all three rules. Change how XP adds
-up, and all three follow.
-
-### What is still written twice
+## What is still written twice
 
 The library does not read your notifiers. A `push` repeats the event name
 and the payload fields your notifier sends:

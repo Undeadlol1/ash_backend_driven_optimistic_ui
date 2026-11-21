@@ -454,6 +454,28 @@ defmodule AshBackendDrivenOptimisticUi.Resource.Verifiers.ValidateRulesTest do
       assert error.message =~ ~r/cannot follow relationships; expose a calculation/
     end
 
+    test "THEN a function the client cannot evaluate is rejected, naming the action and the node" do
+      error = spend_error(quote(do: set(:balance, expr(today()))))
+
+      assert error.message =~ "which the client cannot evaluate"
+      assert error.message =~ "today"
+    end
+
+    test "THEN a function the client cannot evaluate inside a reaction is rejected" do
+      assert [%DslError{path: [:optimistic_ui, :on, :tipped], message: message}] =
+               verifier_errors(
+                 quote do
+                   optimistic_ui do
+                     on :tipped do
+                       set(:balance, expr(today()))
+                     end
+                   end
+                 end
+               )
+
+      assert message =~ "today"
+    end
+
     test "THEN reading the actor is rejected" do
       error = spend_error(quote(do: set(:balance, expr(^actor(:balance)))))
 

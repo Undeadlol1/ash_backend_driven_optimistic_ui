@@ -6,6 +6,10 @@ defmodule AshBackendDrivenOptimisticUi.CompilerTest do
 
   alias Ash.Query.Call
   alias AshBackendDrivenOptimisticUi.Compiler
+  alias AshBackendDrivenOptimisticUi.TestSupport.ComparisonResource
+
+  defp attr_ref(name), do: %Ash.Query.Ref{attribute: name, relationship_path: []}
+  defp present(name), do: %{"!=" => [record(name), nil]}
 
   describe "GIVEN the optimistic UI compiler WHEN an arithmetic or comparison expression is compiled" do
     test "THEN each operator maps to the same-named json logic operator" do
@@ -14,7 +18,7 @@ defmodule AshBackendDrivenOptimisticUi.CompilerTest do
       assert Compiler.compile(expr(a * 2)) == {:ok, %{"*" => [record(:a), 2]}}
       assert Compiler.compile(expr(a / 2)) == {:ok, %{"/" => [record(:a), 2]}}
       assert Compiler.compile(expr(a == 1)) == {:ok, %{"==" => [record(:a), 1]}}
-      assert Compiler.compile(expr(a != 1)) == {:ok, %{"!=" => [record(:a), 1]}}
+      assert Compiler.compile(expr(a != 1)) == {:ok, %{"and" => [present(:a), %{"!=" => [record(:a), 1]}]}}
       assert Compiler.compile(expr(a < 1)) == {:ok, %{"<" => [%{"+" => [record(:a)]}, 1]}}
       assert Compiler.compile(expr(a > 1)) == {:ok, %{">" => [%{"+" => [record(:a)]}, 1]}}
       assert Compiler.compile(expr(a <= 1)) == {:ok, %{"<=" => [%{"+" => [record(:a)]}, 1]}}
@@ -37,6 +41,92 @@ defmodule AshBackendDrivenOptimisticUi.CompilerTest do
       assert Compiler.compile(expr(1 < a)) == {:ok, %{"<" => [1, %{"+" => [record(:a)]}]}}
     end
 
+    test "THEN a comparison with a text literal is not cast" do
+      assert Compiler.compile(expr(a < "m")) == {:ok, %{"<" => [record(:a), "m"]}}
+      assert Compiler.compile(expr("m" >= a)) == {:ok, %{">=" => ["m", record(:a)]}}
+    end
+
+    test "THEN a comparison with a date or time literal compares its ISO 8601 text" do
+      assert Compiler.compile(expr(a < ^~D[2000-01-01])) == {:ok, %{"<" => [record(:a), "2000-01-01"]}}
+      assert Compiler.compile(expr(a < ^~T[10:30:00])) == {:ok, %{"<" => [record(:a), "10:30:00"]}}
+      assert Compiler.compile(expr(a < ^~N[2000-01-01 10:30:00])) == {:ok, %{"<" => [record(:a), "2000-01-01T10:30:00"]}}
+
+      assert Compiler.compile(expr(a < ^~U[2000-01-01 10:30:00Z])) ==
+               {:ok, %{"<" => [record(:a), "2000-01-01T10:30:00Z"]}}
+    end
+
+    test "THEN attributes and arguments that travel as text are not cast when the resource is given" do
+      opts = [resource: ComparisonResource, action: :born_before_cutoff]
+
+      assert Compiler.compile(expr(name < name), opts) == {:ok, %{"<" => [record(:name), record(:name)]}}
+      assert Compiler.compile(expr(born_on < arg(:cutoff)), opts) == {:ok, %{"<" => [record(:born_on), input(:cutoff)]}}
+      assert Compiler.compile(expr(arg(:cutoff) >= 1), opts) == {:ok, %{">=" => [input(:cutoff), "1"]}}
+    end
+
+    test "THEN calculations, aggregates and new types that store as text are not cast" do
+      opts = [resource: ComparisonResource, action: :born_before_cutoff]
+
+      assert Compiler.compile(expr(shout < whisper), opts) == {:ok, %{"<" => [record(:shout), record(:whisper)]}}
+
+      assert Compiler.compile(expr(first_child_name < "m"), opts) ==
+               {:ok, %{"<" => [record(:first_child_name), "m"]}}
+
+      assert Compiler.compile(expr(nickname < nickname), opts) == {:ok, %{"<" => [record(:nickname), record(:nickname)]}}
+    end
+
+    test "THEN number and decimal attributes keep the cast when the resource is given" do
+      opts = [resource: ComparisonResource, action: :born_before_cutoff]
+
+      assert Compiler.compile(expr(score < amount), opts) ==
+               {:ok, %{"<" => [%{"+" => [record(:score)]}, %{"+" => [record(:amount)]}]}}
+    end
+
+    test "THEN a date-time literal is written in the text form of the attribute it meets" do
+      opts = [resource: ComparisonResource, action: :at_since]
+
+      utc_plus_two = %DateTime{
+        year: 2020,
+        month: 1,
+        day: 1,
+        hour: 2,
+        minute: 0,
+        second: 0,
+        microsecond: {0, 0},
+        time_zone: "Etc/GMT-2",
+        zone_abbr: "+02",
+        utc_offset: 7200,
+        std_offset: 0
+      }
+
+      assert Compiler.compile(expr(at >= ^~U[2020-01-01 00:00:00Z]), opts) ==
+               {:ok, %{">=" => [record(:at), "2020-01-01T00:00:00.000000Z"]}}
+
+      assert Compiler.compile(expr(at_sec >= ^~U[2020-01-01 00:00:00Z]), opts) ==
+               {:ok, %{">=" => [record(:at_sec), "2020-01-01T00:00:00Z"]}}
+
+      assert Compiler.compile(expr(at == ^utc_plus_two), opts) ==
+               {:ok, %{"==" => [record(:at), "2020-01-01T00:00:00.000000Z"]}}
+
+      assert Compiler.compile(expr(at_sec < ^~U[2020-01-01 00:00:00.5Z]), opts) ==
+               {:error, {:unsupported, ~U[2020-01-01 00:00:00.5Z]}}
+    end
+
+    test "THEN date-times whose text forms differ are unsupported, in every comparison" do
+      opts = [resource: ComparisonResource, action: :at_since]
+
+      for operator <- [:<, :>, :<=, :>=, :==, :!=] do
+        assert {:error, {:unsupported, _}} =
+                 Compiler.compile(%Call{name: operator, args: [attr_ref(:at), attr_ref(:at_sec)]}, opts)
+
+        assert {:error, {:unsupported, _}} =
+                 Compiler.compile(%Call{name: operator, args: [attr_ref(:at_sec), %Call{name: :now, args: []}]}, opts)
+      end
+
+      assert {:ok, _} = Compiler.compile(expr(at < now()), opts)
+      assert {:ok, _} = Compiler.compile(expr(at < at), opts)
+      assert {:error, {:unsupported, _}} = Compiler.compile(expr(born_on < at), opts)
+    end
+
     test "THEN nested concatenation flattens into one cat list" do
       assert Compiler.compile(expr(a <> "-" <> b <> "!")) ==
                {:ok, %{"cat" => [%{"to_string" => [record(:a)]}, "-", %{"to_string" => [record(:b)]}, "!"]}}
@@ -52,8 +142,24 @@ defmodule AshBackendDrivenOptimisticUi.CompilerTest do
                {:ok, %{"+" => [record(:a), %{"var" => "event.amount"}]}}
     end
 
-    test "THEN membership becomes in with the list compiled" do
-      assert Compiler.compile(expr(a in [1, 2])) == {:ok, %{"in" => [record(:a), [1, 2]]}}
+    test "THEN membership becomes in with the list compiled, after a check that the value is not nil" do
+      assert Compiler.compile(expr(a in [1, 2])) ==
+               {:ok, %{"and" => [present(:a), %{"in" => [record(:a), [1, 2]]}]}}
+    end
+
+    test "THEN == checks both sides for nil only when neither is a literal" do
+      assert Compiler.compile(expr(a == b)) ==
+               {:ok, %{"and" => [present(:a), present(:b), %{"==" => [record(:a), record(:b)]}]}}
+
+      assert Compiler.compile(expr(a == "x")) == {:ok, %{"==" => [record(:a), "x"]}}
+      assert Compiler.compile(expr(a == nil)) == {:ok, %{"==" => [record(:a), nil]}}
+    end
+
+    test "THEN != checks only the sides that are not literals" do
+      assert Compiler.compile(expr(a != b)) ==
+               {:ok, %{"and" => [present(:a), present(:b), %{"!=" => [record(:a), record(:b)]}]}}
+
+      assert Compiler.compile(expr(1 != 2)) == {:ok, %{"!=" => [1, 2]}}
     end
   end
 

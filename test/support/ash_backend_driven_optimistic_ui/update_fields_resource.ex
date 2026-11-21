@@ -20,6 +20,16 @@ defmodule AshBackendDrivenOptimisticUi.TestSupport.UpdateFieldsResource do
     optimistic :edit_counting
     optimistic :remove_titled
     optimistic :make
+    optimistic :make_with_default
+    optimistic :make_stamped
+    optimistic :make_untitled
+    optimistic :make_tagged
+    optimistic :make_noted
+    optimistic :make_new_status
+    optimistic :make_new_status_unaccepted
+    optimistic :edit_untitled
+    optimistic :edit_labelled
+    optimistic :edit_labelled_literal
 
     optimistic :edit_declared_title do
       set :title, expr(arg(:title))
@@ -41,6 +51,55 @@ defmodule AshBackendDrivenOptimisticUi.TestSupport.UpdateFieldsResource do
 
     create :make do
       accept [:title]
+    end
+
+    create :make_with_default do
+      accept [:title, :status]
+    end
+
+    create :make_stamped do
+      accept [:title, :stamp]
+    end
+
+    create :make_untitled do
+      accept [:title]
+      change set_attribute(:title, "untitled", new?: true)
+    end
+
+    create :make_tagged do
+      accept [:tag, :motto]
+    end
+
+    create :make_noted do
+      accept []
+      change set_attribute(:note, "noted", new?: true)
+    end
+
+    create :make_new_status do
+      accept [:status]
+      change set_attribute(:status, "changed", new?: true)
+    end
+
+    create :make_new_status_unaccepted do
+      accept []
+      change set_attribute(:status, "changed", new?: true)
+    end
+
+    update :edit_untitled do
+      require_atomic? false
+      accept [:title]
+      change set_attribute(:title, "untitled", new?: true)
+    end
+
+    update :edit_labelled do
+      accept []
+      argument :label, :string
+      change set_attribute(:title, arg(:label), set_when_nil?: false)
+    end
+
+    update :edit_labelled_literal do
+      accept []
+      change set_attribute(:title, "fixed", set_when_nil?: false)
     end
 
     update :edit do
@@ -88,5 +147,9 @@ defmodule AshBackendDrivenOptimisticUi.TestSupport.UpdateFieldsResource do
     attribute :title, :string, public?: true
     attribute :note, :string, public?: true
     attribute :count, :integer, public?: true
+    attribute :status, :string, public?: true, default: "open"
+    attribute :tag, :string, public?: true, default: ""
+    attribute :motto, :string, public?: true, default: "  hi  "
+    attribute :stamp, :utc_datetime, public?: true, default: &DateTime.utc_now/0
   end
 end

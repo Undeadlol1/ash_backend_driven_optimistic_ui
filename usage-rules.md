@@ -31,7 +31,8 @@ is published yet.
   `resource AshBackendDrivenOptimisticUi.RuleSet` to a domain and expose its
   `:rules` action with your API layer; do not write a route that returns
   `Registry.rules/0`; the client downloads them again when
-  `Registry.version/0` changes) and, with the answer to each save, `PushCollector.drain_reconciliation/1`. Call
+  `Registry.version/0` changes) and, with the answer to each save, `PushCollector.drain_reconciliation(header_values)`, which takes the values of
+  the request header named by `PushCollector.optimistic_ids_header/0`. Call
   `PushCollector.open/0` before the action. Do not build the payload by hand.
 - Whatever sends pushes must call
   `AshBackendDrivenOptimisticUi.PushCollector.record/2`.
@@ -80,7 +81,8 @@ is published yet.
   payload (`event(:key)`), never action arguments.
 - Do not write a `set` the action already makes by itself. Readable
   `atomic_update(attr, expr)` and `set_attribute(attr, value)` changes, and
-  every attribute a create accepts, become `set` effects on their own. A
+  every attribute the action accepts, become `set` effects on their own (on an
+  update, inside `where expr(has_arg(attr))`). A
   declared `set` for the same attribute replaces the derived one.
 
 ## What an expression may read
@@ -92,7 +94,7 @@ is published yet.
   related data, add a calculation or aggregate to the resource and read that.
 - Only the functions `AshBackendDrivenOptimisticUi.Compiler` supports:
   `+ - * /`, comparisons, `<>`, `in`, `and`, `or`, `not`, `if`, `is_nil`,
-  `abs`, `round`, `to_string`, `has_arg`. Anything else fails compilation.
+  `abs`, `round`, `to_string`, `now`, `has_arg`. Anything else fails compilation.
 - A wrong rule fails at compile time with a message naming the action. Fix
   the rule; do not catch the error.
 

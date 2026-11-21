@@ -278,6 +278,20 @@ defmodule AshBackendDrivenOptimisticUi.JsonLogicTest do
       assert JsonLogic.run(%{">=" => ["a", 1]}, @data) == false
     end
 
+    test "WHEN a number cast of a nil or non-numeric value is ordered THEN it is false instead of raising" do
+      for operator <- ["<", ">", "<=", ">="], operand <- [nil, "abc", true] do
+        assert JsonLogic.run(%{operator => [%{"+" => [operand]}, 5]}, @data) == false
+        assert JsonLogic.run(%{operator => [5, %{"+" => [operand]}]}, @data) == false
+      end
+    end
+
+    test "WHEN a compiled Ash comparison meets a nil value THEN it is false, as in Ash" do
+      {:ok, rule} = Compiler.compile(expr(score > 5))
+
+      refute JsonLogic.run(rule, %{"record" => %{"score" => nil}})
+      assert JsonLogic.run(rule, %{"record" => %{"score" => 6}})
+    end
+
     test "WHEN the operator is unknown THEN it raises naming the operator" do
       error = assert_raise ArgumentError, fn -> JsonLogic.run(%{"frobnicate" => [1, 2]}, @data) end
 

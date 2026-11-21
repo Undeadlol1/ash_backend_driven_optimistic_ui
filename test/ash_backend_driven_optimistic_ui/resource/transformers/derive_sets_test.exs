@@ -224,4 +224,111 @@ defmodule AshBackendDrivenOptimisticUi.Resource.Transformers.DeriveSetsTest do
       assert DeriveSets.after?(Ash.Resource.Transformers.BelongsToAttribute)
     end
   end
+
+  describe "GIVEN a set_attribute with options WHEN the resource is transformed" do
+    test "THEN new?: true on a create's accepted attribute takes the sent value, else the given one" do
+      assert rule(:make_untitled) == %{
+               "effects" => [
+                 %{
+                   "set" => %{
+                     "title" => %{"if" => [%{"has" => "input.title"}, input(:title), "untitled"]}
+                   },
+                   "source" => "derived"
+                 }
+               ]
+             }
+    end
+
+    test "THEN new?: true on an update claims only the sent value" do
+      assert rule(:edit_untitled) == %{
+               "effects" => [
+                 %{
+                   "where" => %{"has" => "input.title"},
+                   "effects" => [%{"set" => %{"title" => input(:title)}, "source" => "derived"}]
+                 }
+               ]
+             }
+    end
+
+    test "THEN set_when_nil?: false applies only when the value is not nil" do
+      assert rule(:edit_labelled) == %{
+               "effects" => [
+                 %{
+                   "where" => %{"!" => [%{"==" => [input(:label), nil]}]},
+                   "effects" => [%{"set" => %{"title" => input(:label)}, "source" => "derived"}]
+                 }
+               ]
+             }
+    end
+
+    test "THEN set_when_nil?: false with a literal value needs no condition" do
+      assert rule(:edit_labelled_literal) == %{
+               "effects" => [%{"set" => %{"title" => "fixed"}, "source" => "derived"}]
+             }
+    end
+
+    test "THEN a create takes the attribute's literal default when the input omits it" do
+      assert rule(:make_with_default)["effects"] == [
+               %{"set" => %{"title" => input(:title)}, "source" => "derived"},
+               %{
+                 "set" => %{"status" => %{"if" => [%{"has" => "input.status"}, input(:status), "open"]}},
+                 "source" => "derived"
+               }
+             ]
+    end
+
+    test "THEN a create claims nothing for a default only the server can compute" do
+      assert rule(:make_stamped)["effects"] == [
+               %{"set" => %{"title" => input(:title)}, "source" => "derived"},
+               %{
+                 "where" => %{"has" => "input.stamp"},
+                 "effects" => [%{"set" => %{"stamp" => input(:stamp)}, "source" => "derived"}]
+               }
+             ]
+    end
+  end
+
+  describe "GIVEN a set_attribute with options WHEN the real action runs" do
+    test "THEN new?: true keeps a sent value and fills an omitted one, on a create and an update" do
+      assert optimistic(UpdateFieldsResource, :make_untitled, nil, %{title: "mine"}).title == "mine"
+      assert optimistic(UpdateFieldsResource, :make_untitled, nil, %{}).title == "untitled"
+
+      assert optimistic(UpdateFieldsResource, :edit_untitled, titled(%{title: "old"}), %{title: "mine"}).title == "mine"
+      assert optimistic(UpdateFieldsResource, :edit_untitled, titled(%{title: "old"}), %{}).title == "untitled"
+    end
+
+    test "THEN new?: true on a create keeps the default of an attribute that has one, accepted or not" do
+      assert optimistic(UpdateFieldsResource, :make_new_status, nil, %{}).status == "open"
+      assert optimistic(UpdateFieldsResource, :make_new_status, nil, %{status: "sent"}).status == "sent"
+
+      assert optimistic(UpdateFieldsResource, :make_new_status_unaccepted, nil, %{}).status == "open"
+    end
+
+    test "THEN new?: true on a create claims its value for an attribute with no default, accepted or not" do
+      assert optimistic(UpdateFieldsResource, :make_noted, nil, %{}).note == "noted"
+    end
+
+    test "THEN a create takes a default as Ash stores it: an empty text as nil, a padded one trimmed" do
+      assert optimistic(UpdateFieldsResource, :make_tagged, nil, %{}).tag == nil
+      assert optimistic(UpdateFieldsResource, :make_tagged, nil, %{}).motto == "hi"
+      assert optimistic(UpdateFieldsResource, :make_tagged, nil, %{tag: "t", motto: "m"}).tag == "t"
+    end
+
+    test "THEN set_when_nil?: false leaves the record alone when the value is nil" do
+      record = titled(%{title: "old"})
+
+      assert optimistic(UpdateFieldsResource, :edit_labelled, record, %{label: nil}).title == "old"
+      assert optimistic(UpdateFieldsResource, :edit_labelled, record, %{label: "new"}).title == "new"
+    end
+
+    test "THEN a create without an accepted attribute gets its default, as the rule says" do
+      assert optimistic(UpdateFieldsResource, :make_with_default, nil, %{title: "t"}).status == "open"
+      assert optimistic(UpdateFieldsResource, :make_with_default, nil, %{title: "t", status: "done"}).status == "done"
+    end
+
+    test "THEN a create with a computed default passes whether or not the input carries it" do
+      assert optimistic(UpdateFieldsResource, :make_stamped, nil, %{title: "t"}).stamp
+      assert optimistic(UpdateFieldsResource, :make_stamped, nil, %{title: "t", stamp: ~U[2026-01-01 10:00:00Z]}).stamp
+    end
+  end
 end

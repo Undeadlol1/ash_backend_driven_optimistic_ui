@@ -10,7 +10,7 @@ compilation fails with a message that names the action.
 | In the expression | Reads | Where |
 | --- | --- | --- |
 | `balance` | an attribute, calculation or aggregate of the same resource | `optimistic` and `on` |
-| `arg(:cost)` | an argument of the action, or an attribute a create accepts | `optimistic` only |
+| `arg(:cost)` | an argument of the action, or an attribute the action accepts | `optimistic` only |
 | `^context(:key)` | a field of the record's `ctx` map, which the server fills (see [`ctx`](how-it-works.md#ctx)) | `optimistic` and `on` |
 | `event(:key)` | a field of the pushed event | `on` only |
 | `has_arg(:name)` | whether the input carries that key | `optimistic` only |
@@ -31,10 +31,10 @@ resource.
 | You write | The client runs |
 | --- | --- |
 | `+ - * /`, unary `-` | the same |
-| `== !=` | the same |
-| `< > <= >=` | the same, each side that is not a number literal cast to a number with `+` |
+| `== !=` | the same, after a check that the sides that are not literals are not null (Ash gives nil, so false, when a side is nil) |
+| `< > <= >=` | the same, each side that is not a number literal cast to a number with `+`, unless a side is text or a date (then no cast) |
 | `a <> b` | `cat` (nested ones become one), each part that is not a text literal wrapped in `to_string` |
-| `x in list` | `in` |
+| `x in list` | `in`, after the same null check |
 | `and`, `or`, `not` | `and`, `or`, `!` |
 | `if(cond, then: a, else: b)` | `if` |
 | `is_nil(x)` | `x == nil` |
@@ -50,7 +50,15 @@ text.
 Two rules of the translator keep Ash behaviour on a standard evaluator.
 Compared values are cast to numbers with `+`, because Ash sends decimals as
 text and standard JSON Logic would compare two texts as text (`"10.5"` would
-be smaller than `"9"`). Joined values are wrapped in `to_string`, because
+be smaller than `"9"`). Texts, dates and times compare as text, so nothing is
+cast when a side is a text or date literal or an attribute, calculation,
+aggregate or argument that Ash sends as text (a new type counts as the type
+it stores as). A number literal on the other side becomes its text, as
+Ash casts it. A date or time literal is written in the text form of the
+attribute or argument it is compared with (a `utc_datetime_usec` has six
+fraction digits, a `utc_datetime` none), and a comparison of two date or time
+values whose text forms differ, such as `now()` against a `utc_datetime`, is
+rejected. Joined values are wrapped in `to_string`, because
 standard `cat` prints an empty value as `null` and you expect nothing.
 
 Any other function, such as `contains` or `today()`,
@@ -81,7 +89,15 @@ action:
   gives the sets that `optimistic_sets(opts)` returns, with the opts the
   action passes. They apply every time, and the same rules as any `set`
   hold: no relationship, no actor.
-- For a create, every attribute in `accept` becomes `set attr, arg(attr)`.
+- For a create, every attribute in `accept` becomes `set attr, arg(attr)`, or
+  the attribute's literal default, as Ash stores it, when the input omits it
+  (`""` on a string is nil). An attribute with a computed default is set only when the input carries it.
+- For an update, every attribute in `accept` becomes the same set, inside
+  `where expr(has_arg(attr))`: an update changes a field only when the input
+  carries it.
+- The options of `set_attribute` are followed: `new?: true` on a create takes
+  the sent value, else the given one (on an update, and on an attribute with a default, it is skipped), and
+  `set_when_nil?: false` applies the set only when the value is not nil.
 
 Derived sets are marked `"source": "derived"` in the rule, declared ones
 `"declared"`. Changes that are a function or a module without `optimistic_sets/1`, and changes with a

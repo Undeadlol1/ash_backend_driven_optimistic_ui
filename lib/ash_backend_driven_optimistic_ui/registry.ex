@@ -13,7 +13,8 @@ defmodule AshBackendDrivenOptimisticUi.Registry do
 
       %{"on" => "xp_awarded", "type" => "wallet", "effects" => [effect]}
 
-  A reaction runs once per `{event, type}` per rule, so cycles end.
+  A reaction runs once per `{event, type}` per rule, so cycles end. Two resources
+  that produce the same rule key make `rules/1` raise.
   """
 
   alias Ash.Domain.Info, as: DomainInfo
@@ -52,9 +53,8 @@ defmodule AshBackendDrivenOptimisticUi.Registry do
 
     merged =
       resources
-      |> Enum.map(&Rules.for_resource/1)
-      |> Enum.reduce(%{}, &Map.merge(&2, &1))
-      |> Map.new(fn {key, rule} ->
+      |> Enum.reduce(%{}, &add_rules/2)
+      |> Map.new(fn {key, {_resource, rule}} ->
         {key, Map.put(rule, "reactions", chain(rule["effects"], reactions))}
       end)
 
@@ -71,7 +71,26 @@ defmodule AshBackendDrivenOptimisticUi.Registry do
     for domain <- domains,
         resource <- DomainInfo.resources(domain),
         Resource in Spark.extensions(resource),
+        uniq: true,
         do: resource
+  end
+
+  defp add_rules(resource, rules) do
+    resource
+    |> Rules.for_resource()
+    |> Enum.reduce(rules, fn {key, rule}, rules ->
+      case rules do
+        %{^key => {other, _rule}} -> raise duplicate_key(key, other, resource)
+        _new_key -> Map.put(rules, key, {resource, rule})
+      end
+    end)
+  end
+
+  defp duplicate_key(key, first, second) do
+    ArgumentError.exception(
+      "#{inspect(first)} and #{inspect(second)} both produce the rule key #{inspect(key)}; " <>
+        "the two resources need different type names; a JSON:API type is one way to give one"
+    )
   end
 
   defp resource_reactions(resource) do
