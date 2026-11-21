@@ -226,19 +226,28 @@ defmodule AshBackendDrivenOptimisticUi.Resource.Transformers.DeriveSetsTest do
   end
 
   describe "GIVEN a set_attribute with options WHEN the resource is transformed" do
-    test "THEN new?: true on an accepted attribute takes the sent value, else the given one" do
-      for action <- [:make_untitled, :edit_untitled] do
-        assert rule(action) == %{
-                 "effects" => [
-                   %{
-                     "set" => %{
-                       "title" => %{"if" => [%{"has" => "input.title"}, input(:title), "untitled"]}
-                     },
-                     "source" => "derived"
-                   }
-                 ]
-               }
-      end
+    test "THEN new?: true on a create's accepted attribute takes the sent value, else the given one" do
+      assert rule(:make_untitled) == %{
+               "effects" => [
+                 %{
+                   "set" => %{
+                     "title" => %{"if" => [%{"has" => "input.title"}, input(:title), "untitled"]}
+                   },
+                   "source" => "derived"
+                 }
+               ]
+             }
+    end
+
+    test "THEN new?: true on an update claims only the sent value" do
+      assert rule(:edit_untitled) == %{
+               "effects" => [
+                 %{
+                   "where" => %{"has" => "input.title"},
+                   "effects" => [%{"set" => %{"title" => input(:title)}, "source" => "derived"}]
+                 }
+               ]
+             }
     end
 
     test "THEN set_when_nil?: false applies only when the value is not nil" do

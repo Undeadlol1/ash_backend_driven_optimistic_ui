@@ -10,8 +10,10 @@ defmodule AshBackendDrivenOptimisticUi.Resource.Transformers.DeriveSets do
   for each accepted attribute, inside `where expr(has_arg(attr))`: an update
   changes a field only when the input carries it. A declared `set` for the
   same attribute wins, and so does a readable change over an accepted one.
-  The options of `set_attribute` are followed: `new?: true` on an accepted
-  attribute takes the sent value, else the given one; `set_when_nil?: false`
+  The options of `set_attribute` are followed: `new?: true` on a create's
+  accepted attribute takes the sent value, else the given one (on an update
+  it is skipped, because Ash fills it differently when the update is atomic);
+  `set_when_nil?: false`
   applies the set only when the value is not nil. A create gets, for an
   accepted attribute with a literal default, the sent value or else that
   default; for any other default (a function, say) it claims nothing unless
@@ -117,6 +119,8 @@ defmodule AshBackendDrivenOptimisticUi.Resource.Transformers.DeriveSets do
 
     cond do
       not readable_value?(value) -> []
+      # An atomic update fills only a stored nil, a non-atomic one any value not sent: claim nothing.
+      opts[:new?] && action.type == :update -> []
       opts[:new?] -> [set(attribute, new_value(action, attribute, value))]
       opts[:set_when_nil?] == false and not literal?(value) -> [when_present(attribute, value)]
       true -> [set(attribute, value)]
