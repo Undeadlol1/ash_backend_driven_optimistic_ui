@@ -13,10 +13,11 @@ defmodule AshBackendDrivenOptimisticUi.JsonLogic do
 
   Where JavaScript would produce `NaN`, which JSON cannot carry, this raises
   `ArgumentError` instead: arithmetic (`+ - * / % min max abs round`) accepts
-  only numbers and numeric strings. An unknown operation, or a map holding more
+  only numbers and numeric strings, except the unary `+` (a number cast),
+  which gives NaN, kept as `:nan`, for a value that is not a number. An unknown operation, or a map holding more
   than one operation, raises too. Comparison with `<`, `>`, `<=` and `>=` never
   raises: two texts compare as text, anything else compares as numbers, and a
-  side that is not numeric makes the result `false`.
+  side that is not numeric (or NaN, as `+nil` is) makes the result `false`.
 
   `cat` prints `nil` as `null` and a whole float without its fraction.
   """
@@ -69,6 +70,15 @@ defmodule AshBackendDrivenOptimisticUi.JsonLogic do
   defp evaluated("missing", values, data), do: missing(values, data)
   defp evaluated("missing_some", [needed, keys], data), do: missing_some(needed, keys, data)
   defp evaluated(operator, values, _data), do: evaluated(operator, values)
+
+  # A unary `+` is the number cast; what is no number is NaN, which JSON cannot carry, so it stays `:nan`
+  # and every ordering against it is false.
+  defp evaluated("+", [value]) do
+    case parse_number(value) do
+      {:ok, number} -> number
+      :error -> :nan
+    end
+  end
 
   defp evaluated("+", values), do: values |> Enum.map(&number/1) |> Enum.sum()
   defp evaluated("-", [value]), do: -number(value)

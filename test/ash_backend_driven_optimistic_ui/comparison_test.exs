@@ -31,6 +31,11 @@ defmodule AshBackendDrivenOptimisticUi.ComparisonTest do
   end
 
   describe "GIVEN a rule that compares a nil value WHEN the real action runs" do
+    test "THEN > against a nil attribute is false, as in Ash" do
+      assert optimistic(ComparisonResource, :score_over_five, thing(%{}), %{}).verdict == "no"
+      assert optimistic(ComparisonResource, :score_over_five, thing(%{score: 6}), %{}).verdict == "yes"
+    end
+
     test "THEN != against a nil attribute is false, as in Ash" do
       assert optimistic(ComparisonResource, :score_differs_from_five, thing(%{}), %{}).verdict == "no"
       assert optimistic(ComparisonResource, :score_differs_from_five, thing(%{score: 4}), %{}).verdict == "yes"
