@@ -83,7 +83,9 @@ action:
   gives the sets that `optimistic_sets(opts)` returns, with the opts the
   action passes. They apply every time, and the same rules as any `set`
   hold: no relationship, no actor.
-- For a create, every attribute in `accept` becomes `set attr, arg(attr)`.
+- For a create, every attribute in `accept` becomes `set attr, arg(attr)`, or
+  the attribute's literal default when the input omits it. An attribute with a
+  computed default is set only when the input carries it.
 
 Derived sets are marked `"source": "derived"` in the rule, declared ones
 `"declared"`. Changes that are a function or a module without `optimistic_sets/1`, and changes with a
