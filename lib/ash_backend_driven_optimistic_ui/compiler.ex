@@ -24,8 +24,9 @@ defmodule AshBackendDrivenOptimisticUi.Compiler do
   compare two such texts as text (`"10.5" >= "9"` is false). The cast is left
   out when either side is known to be text: a text literal, a date or time
   literal (compiled to its ISO 8601 text), or, when `compile/2` is given the
-  resource (and the action, for arguments), an attribute or argument of a type
-  Ash sends as text (string, atom, date, datetime, time, uuid). A number
+  resource (and the action, for arguments), an attribute, calculation, aggregate or
+  argument of a type Ash sends as text (string, atom, date, datetime, time, uuid; a
+  new type counts as the type it stores as). A number
   literal that meets one is compiled as its text, as Ash casts it. A date or time
   literal that meets such an attribute or argument is written in the text form
   of its type (a `utc_datetime_usec` has six fraction digits, a `utc_datetime`
@@ -79,8 +80,7 @@ defmodule AshBackendDrivenOptimisticUi.Compiler do
     Ash.Type.CiString,
     Ash.Type.Atom,
     Ash.Type.Date,
-    Ash.Type.UtcDatetime,
-    Ash.Type.UtcDatetimeUsec,
+    Ash.Type.DateTime,
     Ash.Type.NaiveDatetime,
     Ash.Type.Time,
     Ash.Type.UUID
@@ -217,8 +217,10 @@ defmodule AshBackendDrivenOptimisticUi.Compiler do
   defp text?(operand, context), do: text_type?(field_type(operand, context))
 
   # The type and constraints of an attribute or argument the operand names, when the context knows them.
-  defp field_type(%Ref{attribute: name, relationship_path: []}, %{resource: resource}),
-    do: type_of(Info.attribute(resource, name))
+  defp field_type(%Ref{attribute: name, relationship_path: []}, %{resource: resource}) do
+    type_of(Info.attribute(resource, name) || Info.calculation(resource, name)) ||
+      aggregate_type(resource, Info.aggregate(resource, name))
+  end
 
   defp field_type(%Call{name: :arg, args: [name]}, context), do: field_type({:_arg, name}, context)
 
@@ -230,6 +232,15 @@ defmodule AshBackendDrivenOptimisticUi.Compiler do
   defp type_of(%{type: type} = field), do: {type, Map.get(field, :constraints) || []}
   defp type_of(_missing), do: nil
 
+  defp aggregate_type(_resource, nil), do: nil
+
+  defp aggregate_type(resource, aggregate) do
+    case Ash.Query.Aggregate.aggregate_type(resource, aggregate) do
+      {:ok, type, constraints} -> {type, constraints}
+      _unknown -> nil
+    end
+  end
+
   defp argument(%{resource: resource, action: action}, name) do
     with %{arguments: arguments} = action <- Info.action(resource, action) do
       Enum.find(arguments, &(&1.name == name)) ||
@@ -237,7 +248,7 @@ defmodule AshBackendDrivenOptimisticUi.Compiler do
     end
   end
 
-  defp text_type?({type, _constraints}), do: Ash.Type.get_type(type) in @text_types
+  defp text_type?({type, constraints}), do: type |> resolve(constraints) |> elem(0) |> Kernel.in(@text_types)
   defp text_type?(_unknown), do: false
 
   # Both sides of a comparison, with a date or time literal written in the text form of the type

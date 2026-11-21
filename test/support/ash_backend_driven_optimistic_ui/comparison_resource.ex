@@ -1,3 +1,8 @@
+defmodule AshBackendDrivenOptimisticUi.TestSupport.NameType do
+  @moduledoc false
+  use Ash.Type.NewType, subtype_of: :string
+end
+
 defmodule AshBackendDrivenOptimisticUi.TestSupport.ComparisonResource do
   @moduledoc """
   Updates that compare texts, dates, numbers and nil values, so the compiled
@@ -23,6 +28,7 @@ defmodule AshBackendDrivenOptimisticUi.TestSupport.ComparisonResource do
     optimistic :score_equals_limit
     optimistic :score_in_list
     optimistic :name_over_five
+    optimistic :shout_before_whisper
     optimistic :at_from_2020
     optimistic :at_sec_from_2020
     optimistic :at_since
@@ -78,6 +84,11 @@ defmodule AshBackendDrivenOptimisticUi.TestSupport.ComparisonResource do
       change atomic_update(:verdict, expr(if(name > 5, do: "yes", else: "no")))
     end
 
+    update :shout_before_whisper do
+      require_atomic? false
+      change atomic_update(:verdict, expr(if(shout < whisper, do: "yes", else: "no")))
+    end
+
     update :at_from_2020 do
       require_atomic? false
       change atomic_update(:verdict, expr(if(at >= ^~U[2020-01-01 00:00:00Z], do: "yes", else: "no")))
@@ -100,7 +111,22 @@ defmodule AshBackendDrivenOptimisticUi.TestSupport.ComparisonResource do
     end
   end
 
+  relationships do
+    has_many :children, __MODULE__, destination_attribute: :parent_id
+  end
+
+  calculations do
+    calculate :shout, :string, expr(name <> "!"), public?: true
+    calculate :whisper, :string, expr(name <> "?"), public?: true
+  end
+
+  aggregates do
+    first :first_child_name, :children, :name, public?: true
+  end
+
   attributes do
+    attribute :parent_id, :uuid
+    attribute :nickname, AshBackendDrivenOptimisticUi.TestSupport.NameType, public?: true
     uuid_primary_key :id
     attribute :name, :string, public?: true
     attribute :born_on, :date, public?: true

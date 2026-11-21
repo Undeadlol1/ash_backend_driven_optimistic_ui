@@ -63,6 +63,17 @@ defmodule AshBackendDrivenOptimisticUi.CompilerTest do
       assert Compiler.compile(expr(arg(:cutoff) >= 1), opts) == {:ok, %{">=" => [input(:cutoff), "1"]}}
     end
 
+    test "THEN calculations, aggregates and new types that store as text are not cast" do
+      opts = [resource: ComparisonResource, action: :born_before_cutoff]
+
+      assert Compiler.compile(expr(shout < whisper), opts) == {:ok, %{"<" => [record(:shout), record(:whisper)]}}
+
+      assert Compiler.compile(expr(first_child_name < "m"), opts) ==
+               {:ok, %{"<" => [record(:first_child_name), "m"]}}
+
+      assert Compiler.compile(expr(nickname < nickname), opts) == {:ok, %{"<" => [record(:nickname), record(:nickname)]}}
+    end
+
     test "THEN number and decimal attributes keep the cast when the resource is given" do
       opts = [resource: ComparisonResource, action: :born_before_cutoff]
 

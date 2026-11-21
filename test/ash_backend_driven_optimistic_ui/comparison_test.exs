@@ -17,6 +17,16 @@ defmodule AshBackendDrivenOptimisticUi.ComparisonTest do
       assert optimistic(ComparisonResource, :name_over_five, thing(%{name: "6"}), %{}).verdict == "yes"
     end
 
+    test "THEN two text calculations compare as text" do
+      record =
+        ComparisonResource
+        |> Ash.Changeset.for_create(:create, %{name: "a"})
+        |> Ash.create!()
+        |> Ash.load!([:shout, :whisper])
+
+      assert optimistic(ComparisonResource, :shout_before_whisper, record, %{}).verdict == "yes"
+    end
+
     test "THEN a date attribute compared with a date literal agrees with Ash" do
       assert optimistic(ComparisonResource, :born_before_2000, thing(%{born_on: ~D[1999-12-31]}), %{}).verdict == "yes"
       assert optimistic(ComparisonResource, :born_before_2000, thing(%{born_on: ~D[2000-01-02]}), %{}).verdict == "no"
