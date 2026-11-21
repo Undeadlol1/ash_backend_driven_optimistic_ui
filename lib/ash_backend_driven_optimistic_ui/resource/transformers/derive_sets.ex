@@ -17,7 +17,8 @@ defmodule AshBackendDrivenOptimisticUi.Resource.Transformers.DeriveSets do
   `set_when_nil?: false`
   applies the set only when the value is not nil. A create gets, for an
   accepted attribute with a literal default, the sent value or else that
-  default; for any other default (a function, say) it claims nothing unless
+  default as Ash stores it (cast with the attribute's type and constraints, so
+  `""` on a string is nil); for any other default (a function, say) it claims nothing unless
   the input carries the value.
   A destroy rule that declares no effect gets `remove()`.
   """
@@ -93,14 +94,29 @@ defmodule AshBackendDrivenOptimisticUi.Resource.Transformers.DeriveSets do
 
   defp accepted_sets(_action, _dsl_state, _from_changes), do: []
 
-  # A create builds the record from the input, and an omitted attribute gets its default.
-  defp accepted_set(:create, attribute, %{default: default}) when not is_nil(default) do
-    if literal?(default),
-      do: set(attribute, if_sent(attribute, default)),
-      else: %Where{condition: sent(attribute), effects: [set(attribute, {:_arg, attribute})]}
+  # A create builds the record from the input, and an omitted attribute gets its default as Ash stores it.
+  defp accepted_set(:create, attribute, %{default: default} = field) when not is_nil(default) do
+    case stored_default(field) do
+      {:ok, nil} ->
+        set(attribute, {:_arg, attribute})
+
+      {:ok, stored} ->
+        if literal?(stored),
+          do: set(attribute, if_sent(attribute, stored)),
+          else: %Where{condition: sent(attribute), effects: [set(attribute, {:_arg, attribute})]}
+
+      _uncastable ->
+        %Where{condition: sent(attribute), effects: [set(attribute, {:_arg, attribute})]}
+    end
   end
 
   defp accepted_set(_type, attribute, _attribute), do: set(attribute, {:_arg, attribute})
+
+  # What a create does to a default: cast it with the attribute's type, then its constraints.
+  defp stored_default(%{type: type, constraints: constraints, default: default}) do
+    with {:ok, cast} <- Ash.Type.cast_input(type, default, constraints),
+         do: Ash.Type.apply_constraints(type, cast, constraints)
+  end
 
   defp set(attribute, value, from \\ nil), do: %Set{attribute: attribute, value: value, derived?: true, from: from}
 

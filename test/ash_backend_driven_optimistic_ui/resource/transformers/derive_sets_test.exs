@@ -308,6 +308,12 @@ defmodule AshBackendDrivenOptimisticUi.Resource.Transformers.DeriveSetsTest do
       assert optimistic(UpdateFieldsResource, :make_noted, nil, %{}).note == "noted"
     end
 
+    test "THEN a create takes a default as Ash stores it: an empty text as nil, a padded one trimmed" do
+      assert optimistic(UpdateFieldsResource, :make_tagged, nil, %{}).tag == nil
+      assert optimistic(UpdateFieldsResource, :make_tagged, nil, %{}).motto == "hi"
+      assert optimistic(UpdateFieldsResource, :make_tagged, nil, %{tag: "t", motto: "m"}).tag == "t"
+    end
+
     test "THEN set_when_nil?: false leaves the record alone when the value is nil" do
       record = titled(%{title: "old"})
 

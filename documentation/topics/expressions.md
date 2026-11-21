@@ -90,13 +90,13 @@ action:
   action passes. They apply every time, and the same rules as any `set`
   hold: no relationship, no actor.
 - For a create, every attribute in `accept` becomes `set attr, arg(attr)`, or
-  the attribute's literal default when the input omits it. An attribute with a
-  computed default is set only when the input carries it.
+  the attribute's literal default, as Ash stores it, when the input omits it
+  (`""` on a string is nil). An attribute with a computed default is set only when the input carries it.
 - For an update, every attribute in `accept` becomes the same set, inside
   `where expr(has_arg(attr))`: an update changes a field only when the input
   carries it.
 - The options of `set_attribute` are followed: `new?: true` on a create takes
-  the sent value, else the given one (on an update it is skipped), and
+  the sent value, else the given one (on an update, and on an attribute with a default, it is skipped), and
   `set_when_nil?: false` applies the set only when the value is not nil.
 
 Derived sets are marked `"source": "derived"` in the rule, declared ones
