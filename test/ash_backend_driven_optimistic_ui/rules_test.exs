@@ -1,13 +1,14 @@
 defmodule AshBackendDrivenOptimisticUi.RulesTest do
   use ExUnit.Case, async: true
 
+  require Spark.Test
+
   import AshBackendDrivenOptimisticUi.TestHelpers, only: [record: 1]
 
   alias AshBackendDrivenOptimisticUi.Rules
   alias AshBackendDrivenOptimisticUi.TestSupport.CreatePushResource
   alias AshBackendDrivenOptimisticUi.TestSupport.ListItemResource
   alias AshBackendDrivenOptimisticUi.TestSupport.SampleResource
-  alias AshBackendDrivenOptimisticUi.TestSupport.UncompilableResource
 
   defp all_effects(rules) do
     rules |> Map.values() |> Enum.flat_map(&flatten_effects(&1["effects"]))
@@ -113,10 +114,41 @@ defmodule AshBackendDrivenOptimisticUi.RulesTest do
       assert Rules.type(SampleResource) == "sample_resource"
     end
 
-    test "WHEN an expression the client cannot run is compiled THEN the error names the resource, the action and the node" do
-      error = assert_raise ArgumentError, fn -> Rules.for_resource(UncompilableResource) end
+    test "WHEN an expression the client cannot run reaches the rules THEN the error names the resource, the action and the node" do
+      # The verifier refuses such a resource at compile time; the module is still defined, so the runtime guard is reachable.
+      resource = Module.concat(__MODULE__, "Uncompilable#{System.unique_integer([:positive])}")
 
-      assert error.message =~ inspect(UncompilableResource)
+      Spark.Test.dsl_errors do
+        Module.create(
+          resource,
+          quote do
+            use Ash.Resource,
+              domain: AshBackendDrivenOptimisticUi.TestSupport.SampleDomain,
+              extensions: [AshBackendDrivenOptimisticUi.Resource]
+
+            optimistic_ui do
+              optimistic :touch do
+                set :balance, expr(today())
+              end
+            end
+
+            actions do
+              defaults [:read]
+              update :touch
+            end
+
+            attributes do
+              uuid_primary_key :id
+              attribute :balance, :integer, public?: true
+            end
+          end,
+          Macro.Env.location(__ENV__)
+        )
+      end
+
+      error = assert_raise ArgumentError, fn -> Rules.for_resource(resource) end
+
+      assert error.message =~ inspect(resource)
       assert error.message =~ ":touch"
       assert error.message =~ "today"
     end

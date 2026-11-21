@@ -5,7 +5,7 @@ defmodule AshBackendDrivenOptimisticUi.Resource.Verifiers.ValidateRules do
   something that is neither an attribute nor a public calculation, an `arg`
   that is neither an argument nor an accepted attribute of the action (or any `arg` inside `on`), an `event` outside
   `on`, a reference to an unknown field, through a relationship, or to the
-  actor.
+  actor, and an expression `AshBackendDrivenOptimisticUi.Compiler` cannot compile.
 
   `insert` is only for a create; `remove` is for any action on a record
   already in the list (a destroy, or an update after which the list no longer
@@ -27,6 +27,7 @@ defmodule AshBackendDrivenOptimisticUi.Resource.Verifiers.ValidateRules do
   alias Ash.Query.Not
   alias Ash.Query.Ref
   alias Ash.Resource.Info
+  alias AshBackendDrivenOptimisticUi.Compiler
   alias AshBackendDrivenOptimisticUi.Effect.Insert
   alias AshBackendDrivenOptimisticUi.Effect.Push
   alias AshBackendDrivenOptimisticUi.Effect.Remove
@@ -186,8 +187,22 @@ defmodule AshBackendDrivenOptimisticUi.Resource.Verifiers.ValidateRules do
   end
 
   defp expression_problem(dsl_state, expression, arguments) do
-    first_problem(expression, nil, dsl_state, arguments)
+    first_problem(expression, nil, dsl_state, arguments) || compile_problem(expression, arguments)
   end
+
+  defp compile_problem(expression, arguments) do
+    case Compiler.compile(expression) do
+      {:ok, _compiled} ->
+        nil
+
+      {:error, {:unsupported, node}} ->
+        "#{trigger_name(arguments)} uses #{inspect(node)}, which the client cannot evaluate " <>
+          "(see AshBackendDrivenOptimisticUi.Compiler)"
+    end
+  end
+
+  defp trigger_name({:action, name, _argument_names}), do: "rule #{inspect(name)}"
+  defp trigger_name(:reaction), do: "this reaction"
 
   defp first_problem(node, problem, dsl_state, arguments) do
     problem = problem || node_problem(dsl_state, node, arguments)
