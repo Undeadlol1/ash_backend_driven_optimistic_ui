@@ -297,6 +297,17 @@ defmodule AshBackendDrivenOptimisticUi.Resource.Transformers.DeriveSetsTest do
       assert optimistic(UpdateFieldsResource, :edit_untitled, titled(%{title: "old"}), %{}).title == "untitled"
     end
 
+    test "THEN new?: true on a create keeps the default of an attribute that has one, accepted or not" do
+      assert optimistic(UpdateFieldsResource, :make_new_status, nil, %{}).status == "open"
+      assert optimistic(UpdateFieldsResource, :make_new_status, nil, %{status: "sent"}).status == "sent"
+
+      assert optimistic(UpdateFieldsResource, :make_new_status_unaccepted, nil, %{}).status == "open"
+    end
+
+    test "THEN new?: true on a create claims its value for an attribute with no default, accepted or not" do
+      assert optimistic(UpdateFieldsResource, :make_noted, nil, %{}).note == "noted"
+    end
+
     test "THEN set_when_nil?: false leaves the record alone when the value is nil" do
       record = titled(%{title: "old"})
 

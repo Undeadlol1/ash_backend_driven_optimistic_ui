@@ -12,7 +12,8 @@ defmodule AshBackendDrivenOptimisticUi.Resource.Transformers.DeriveSets do
   same attribute wins, and so does a readable change over an accepted one.
   The options of `set_attribute` are followed: `new?: true` on a create's
   accepted attribute takes the sent value, else the given one (on an update
-  it is skipped, because Ash fills it differently when the update is atomic);
+  it is skipped, because Ash fills it differently when the update is atomic,
+  and on an attribute with a default it is skipped, because the default wins);
   `set_when_nil?: false`
   applies the set only when the value is not nil. A create gets, for an
   accepted attribute with a literal default, the sent value or else that
@@ -49,7 +50,7 @@ defmodule AshBackendDrivenOptimisticUi.Resource.Transformers.DeriveSets do
     case Info.action(dsl_state, rule.action) do
       %{changes: changes} = action ->
         declared = declared_attributes(rule.effects)
-        from_changes = Enum.flat_map(changes, &derive(&1, action))
+        from_changes = Enum.flat_map(changes, &derive(&1, action, dsl_state))
         undeclared = &Enum.reject(&1, fn set -> MapSet.member?(declared, attribute(set)) end)
 
         derived =
@@ -110,24 +111,26 @@ defmodule AshBackendDrivenOptimisticUi.Resource.Transformers.DeriveSets do
   defp attribute(%Set{attribute: attribute}), do: attribute
   defp attribute(%Where{effects: [set]}), do: attribute(set)
 
-  defp derive(%Change{where: [], change: {Ash.Resource.Change.Atomic, opts}}, _action) do
+  defp derive(%Change{where: [], change: {Ash.Resource.Change.Atomic, opts}}, _action, _dsl_state) do
     [set(opts[:attribute], opts[:expr])]
   end
 
-  defp derive(%Change{where: [], change: {Ash.Resource.Change.SetAttribute, opts}}, action) do
+  defp derive(%Change{where: [], change: {Ash.Resource.Change.SetAttribute, opts}}, action, dsl_state) do
     %{attribute: attribute, value: value} = Map.new(opts)
 
     cond do
       not readable_value?(value) -> []
       # An atomic update fills only a stored nil, a non-atomic one any value not sent: claim nothing.
       opts[:new?] && action.type == :update -> []
+      # Ash counts a default as already changing the attribute, so on a create the default wins.
+      opts[:new?] && match?(%{default: default} when not is_nil(default), Info.attribute(dsl_state, attribute)) -> []
       opts[:new?] -> [set(attribute, new_value(action, attribute, value))]
       opts[:set_when_nil?] == false and not literal?(value) -> [when_present(attribute, value)]
       true -> [set(attribute, value)]
     end
   end
 
-  defp derive(%Change{where: [], change: {module, opts}}, _action) when is_atom(module) do
+  defp derive(%Change{where: [], change: {module, opts}}, _action, _dsl_state) when is_atom(module) do
     Code.ensure_compiled!(module)
 
     if function_exported?(module, :optimistic_sets, 1) do
@@ -138,7 +141,7 @@ defmodule AshBackendDrivenOptimisticUi.Resource.Transformers.DeriveSets do
     end
   end
 
-  defp derive(_opaque_change, _action), do: []
+  defp derive(_opaque_change, _action, _dsl_state), do: []
 
   # `new?: true` keeps a value the input carries, so only an action that accepts the attribute can send one.
   defp new_value(%{accept: accept}, attribute, value) do

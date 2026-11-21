@@ -23,6 +23,9 @@ defmodule AshBackendDrivenOptimisticUi.TestSupport.UpdateFieldsResource do
     optimistic :make_with_default
     optimistic :make_stamped
     optimistic :make_untitled
+    optimistic :make_noted
+    optimistic :make_new_status
+    optimistic :make_new_status_unaccepted
     optimistic :edit_untitled
     optimistic :edit_labelled
     optimistic :edit_labelled_literal
@@ -60,6 +63,21 @@ defmodule AshBackendDrivenOptimisticUi.TestSupport.UpdateFieldsResource do
     create :make_untitled do
       accept [:title]
       change set_attribute(:title, "untitled", new?: true)
+    end
+
+    create :make_noted do
+      accept []
+      change set_attribute(:note, "noted", new?: true)
+    end
+
+    create :make_new_status do
+      accept [:status]
+      change set_attribute(:status, "changed", new?: true)
+    end
+
+    create :make_new_status_unaccepted do
+      accept []
+      change set_attribute(:status, "changed", new?: true)
     end
 
     update :edit_untitled do
