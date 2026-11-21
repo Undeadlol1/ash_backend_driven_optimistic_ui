@@ -52,7 +52,8 @@ Compared values are cast to numbers with `+`, because Ash sends decimals as
 text and standard JSON Logic would compare two texts as text (`"10.5"` would
 be smaller than `"9"`). Texts, dates and times compare as text, so nothing is
 cast when a side is a text or date literal or an attribute or argument that
-Ash sends as text. A date or time literal is written in the text form of the
+Ash sends as text. A number literal on the other side becomes its text, as
+Ash casts it. A date or time literal is written in the text form of the
 attribute or argument it is compared with (a `utc_datetime_usec` has six
 fraction digits, a `utc_datetime` none), and a comparison of two date or time
 values whose text forms differ, such as `now()` against a `utc_datetime`, is

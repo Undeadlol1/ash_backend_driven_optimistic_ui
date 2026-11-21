@@ -12,6 +12,11 @@ defmodule AshBackendDrivenOptimisticUi.ComparisonTest do
       assert optimistic(ComparisonResource, :text_before_m, thing(%{name: "zed"}), %{}).verdict == "no"
     end
 
+    test "THEN a text attribute compared with a number literal compares as text, as Ash does" do
+      assert optimistic(ComparisonResource, :name_over_five, thing(%{name: "10"}), %{}).verdict == "no"
+      assert optimistic(ComparisonResource, :name_over_five, thing(%{name: "6"}), %{}).verdict == "yes"
+    end
+
     test "THEN a date attribute compared with a date literal agrees with Ash" do
       assert optimistic(ComparisonResource, :born_before_2000, thing(%{born_on: ~D[1999-12-31]}), %{}).verdict == "yes"
       assert optimistic(ComparisonResource, :born_before_2000, thing(%{born_on: ~D[2000-01-02]}), %{}).verdict == "no"

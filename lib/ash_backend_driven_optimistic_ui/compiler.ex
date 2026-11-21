@@ -25,7 +25,8 @@ defmodule AshBackendDrivenOptimisticUi.Compiler do
   out when either side is known to be text: a text literal, a date or time
   literal (compiled to its ISO 8601 text), or, when `compile/2` is given the
   resource (and the action, for arguments), an attribute or argument of a type
-  Ash sends as text (string, atom, date, datetime, time, uuid). A date or time
+  Ash sends as text (string, atom, date, datetime, time, uuid). A number
+  literal that meets one is compiled as its text, as Ash casts it. A date or time
   literal that meets such an attribute or argument is written in the text form
   of its type (a `utc_datetime_usec` has six fraction digits, a `utc_datetime`
   none; a non-UTC `DateTime` is shifted to UTC), and a comparison of two date or
@@ -114,7 +115,9 @@ defmodule AshBackendDrivenOptimisticUi.Compiler do
   defp node(%Call{name: name, args: [_left, _right]} = call, context) when name in @comparisons do
     with {:ok, [left, right]} <- aligned(call, context) do
       operands =
-        if text?(left, context) or text?(right, context), do: [left, right], else: [as_number(left), as_number(right)]
+        if text?(left, context) or text?(right, context),
+          do: [as_known_text(left, right, context), as_known_text(right, left, context)],
+          else: [as_number(left), as_number(right)]
 
       operation(@operators[name], operands, context)
     end
@@ -293,6 +296,13 @@ defmodule AshBackendDrivenOptimisticUi.Compiler do
   defp at_precision(original, :second, _fraction, _put), do: unsupported(original)
 
   defp with_text(%type{}, moment), do: {:ok, type.to_iso8601(moment)}
+
+  # Ash casts a number literal that meets text to its text.
+  defp as_known_text(number, other, context) when is_number(number) do
+    if text?(other, context), do: to_string(number), else: number
+  end
+
+  defp as_known_text(operand, _other, _context), do: operand
 
   defp as_number(operand) when is_number(operand) or is_struct(operand, Decimal), do: operand
   defp as_number(operand), do: %Call{name: :+, args: [operand]}

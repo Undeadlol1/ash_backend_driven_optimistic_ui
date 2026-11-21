@@ -22,6 +22,7 @@ defmodule AshBackendDrivenOptimisticUi.TestSupport.ComparisonResource do
     optimistic :score_differs_from_five
     optimistic :score_equals_limit
     optimistic :score_in_list
+    optimistic :name_over_five
     optimistic :at_from_2020
     optimistic :at_sec_from_2020
     optimistic :at_since
@@ -70,6 +71,11 @@ defmodule AshBackendDrivenOptimisticUi.TestSupport.ComparisonResource do
     update :score_in_list do
       require_atomic? false
       change atomic_update(:verdict, expr(if(score in [1, 2], do: "yes", else: "no")))
+    end
+
+    update :name_over_five do
+      require_atomic? false
+      change atomic_update(:verdict, expr(if(name > 5, do: "yes", else: "no")))
     end
 
     update :at_from_2020 do

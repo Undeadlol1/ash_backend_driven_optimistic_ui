@@ -60,7 +60,7 @@ defmodule AshBackendDrivenOptimisticUi.CompilerTest do
 
       assert Compiler.compile(expr(name < name), opts) == {:ok, %{"<" => [record(:name), record(:name)]}}
       assert Compiler.compile(expr(born_on < arg(:cutoff)), opts) == {:ok, %{"<" => [record(:born_on), input(:cutoff)]}}
-      assert Compiler.compile(expr(arg(:cutoff) >= 1), opts) == {:ok, %{">=" => [input(:cutoff), 1]}}
+      assert Compiler.compile(expr(arg(:cutoff) >= 1), opts) == {:ok, %{">=" => [input(:cutoff), "1"]}}
     end
 
     test "THEN number and decimal attributes keep the cast when the resource is given" do
