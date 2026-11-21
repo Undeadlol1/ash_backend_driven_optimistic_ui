@@ -30,6 +30,28 @@ defmodule AshBackendDrivenOptimisticUi.ComparisonTest do
     end
   end
 
+  describe "GIVEN a rule that compares date-times of different precision WHEN the real action runs" do
+    test "THEN a microsecond attribute equal to a second literal counts as equal" do
+      assert optimistic(ComparisonResource, :at_from_2020, thing(%{at: ~U[2020-01-01 00:00:00Z]}), %{}).verdict == "yes"
+      assert optimistic(ComparisonResource, :at_from_2020, thing(%{at: ~U[2019-12-31 23:59:59Z]}), %{}).verdict == "no"
+    end
+
+    test "THEN a second attribute equal to a literal counts as equal" do
+      record = thing(%{at_sec: ~U[2020-01-01 00:00:00Z]})
+
+      assert optimistic(ComparisonResource, :at_sec_from_2020, record, %{}).verdict == "yes"
+    end
+
+    test "THEN a microsecond attribute is compared with a microsecond argument and with now()" do
+      record = thing(%{at: ~U[2020-01-01 00:00:00Z]})
+
+      assert optimistic(ComparisonResource, :at_since, record, %{since: ~U[2020-01-01 00:00:00.000000Z]}).verdict ==
+               "yes"
+
+      assert optimistic(ComparisonResource, :at_before_now, record, %{}).verdict == "yes"
+    end
+  end
+
   describe "GIVEN a rule that compares a nil value WHEN the real action runs" do
     test "THEN > against a nil attribute is false, as in Ash" do
       assert optimistic(ComparisonResource, :score_over_five, thing(%{}), %{}).verdict == "no"

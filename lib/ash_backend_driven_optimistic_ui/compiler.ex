@@ -25,7 +25,12 @@ defmodule AshBackendDrivenOptimisticUi.Compiler do
   out when either side is known to be text: a text literal, a date or time
   literal (compiled to its ISO 8601 text), or, when `compile/2` is given the
   resource (and the action, for arguments), an attribute or argument of a type
-  Ash sends as text (string, atom, date, datetime, time, uuid). Every joined
+  Ash sends as text (string, atom, date, datetime, time, uuid). A date or time
+  literal that meets such an attribute or argument is written in the text form
+  of its type (a `utc_datetime_usec` has six fraction digits, a `utc_datetime`
+  none; a non-UTC `DateTime` is shifted to UTC), and a comparison of two date or
+  time values of different text forms, such as `now()` against a `utc_datetime`
+  attribute, is `{:error, {:unsupported, node}}`. Every joined
   value that is not a text literal is wrapped in `to_string`, because
   standard `cat` prints an empty value as `null` and an Ash developer expects
   nothing.
@@ -106,22 +111,22 @@ defmodule AshBackendDrivenOptimisticUi.Compiler do
     operation("cat", concatenation |> flatten_cat() |> Enum.map(&as_text/1), context)
   end
 
-  defp node(%Call{name: name, args: [left, right]}, context) when name in @comparisons do
-    operands =
-      if text?(left, context) or text?(right, context), do: [left, right], else: [as_number(left), as_number(right)]
+  defp node(%Call{name: name, args: [_left, _right]} = call, context) when name in @comparisons do
+    with {:ok, [left, right]} <- aligned(call, context) do
+      operands =
+        if text?(left, context) or text?(right, context), do: [left, right], else: [as_number(left), as_number(right)]
 
-    operation(@operators[name], operands, context)
+      operation(@operators[name], operands, context)
+    end
   end
 
   # In Ash these are nil, which is falsy, when a side is nil; JSON Logic would say `nil != 5`.
-  defp node(%Call{name: name, args: [_left, _right] = operands}, context) when name in [:==, :!=, :in] do
-    to_check = Enum.reject(operands, &literal?/1)
-    to_check = if name == :== and length(to_check) < 2, do: [], else: to_check
+  defp node(%Call{name: name, args: [_left, _right]} = call, context) when name in [:==, :!=, :in] do
+    with {:ok, operands} <- aligned(call, context) do
+      to_check = Enum.reject(operands, &literal?/1)
+      to_check = if name == :== and length(to_check) < 2, do: [], else: to_check
 
-    with {:ok, comparison} <- operation(@operators[name], operands, context),
-         {:ok, compiled} <- compile_all(to_check, context) do
-      checks = Enum.map(compiled, &%{"!=" => [&1, nil]})
-      if checks == [], do: {:ok, comparison}, else: {:ok, %{"and" => checks ++ [comparison]}}
+      equality(name, operands, to_check, context)
     end
   end
 
@@ -172,6 +177,14 @@ defmodule AshBackendDrivenOptimisticUi.Compiler do
   defp node(list, context) when is_list(list), do: compile_all(list, context)
   defp node(other, _context), do: unsupported(other)
 
+  defp equality(name, operands, to_check, context) do
+    with {:ok, comparison} <- operation(@operators[name], operands, context),
+         {:ok, compiled} <- compile_all(to_check, context) do
+      checks = Enum.map(compiled, &%{"!=" => [&1, nil]})
+      if checks == [], do: {:ok, comparison}, else: {:ok, %{"and" => checks ++ [comparison]}}
+    end
+  end
+
   defp operation(operator, operands, context) do
     with {:ok, compiled} <- compile_all(operands, context), do: {:ok, %{operator => compiled}}
   end
@@ -198,12 +211,21 @@ defmodule AshBackendDrivenOptimisticUi.Compiler do
   defp text?(operand, _context) when is_binary(operand), do: true
   defp text?(%type{}, _context) when type in @temporal_types, do: true
 
-  defp text?(%Ref{attribute: name, relationship_path: []}, %{resource: resource}),
-    do: text_type?(Info.attribute(resource, name))
+  defp text?(operand, context), do: text_type?(field_type(operand, context))
 
-  defp text?(%Call{name: :arg, args: [name]}, context), do: text?({:_arg, name}, context)
-  defp text?({:_arg, name}, %{resource: _resource, action: _action} = context), do: text_type?(argument(context, name))
-  defp text?(_operand, _context), do: false
+  # The type and constraints of an attribute or argument the operand names, when the context knows them.
+  defp field_type(%Ref{attribute: name, relationship_path: []}, %{resource: resource}),
+    do: type_of(Info.attribute(resource, name))
+
+  defp field_type(%Call{name: :arg, args: [name]}, context), do: field_type({:_arg, name}, context)
+
+  defp field_type({:_arg, name}, %{resource: _resource, action: _action} = context),
+    do: type_of(argument(context, name))
+
+  defp field_type(_operand, _context), do: nil
+
+  defp type_of(%{type: type} = field), do: {type, Map.get(field, :constraints) || []}
+  defp type_of(_missing), do: nil
 
   defp argument(%{resource: resource, action: action}, name) do
     with %{arguments: arguments} = action <- Info.action(resource, action) do
@@ -212,8 +234,65 @@ defmodule AshBackendDrivenOptimisticUi.Compiler do
     end
   end
 
-  defp text_type?(%{type: type}), do: Ash.Type.get_type(type) in @text_types
-  defp text_type?(_missing), do: false
+  defp text_type?({type, _constraints}), do: Ash.Type.get_type(type) in @text_types
+  defp text_type?(_unknown), do: false
+
+  # Both sides of a comparison, with a date or time literal written in the text form of the type
+  # it meets: the texts of different forms ("…00Z" and "…00.000000Z") do not compare as the instants.
+  defp aligned(%Call{args: [left, right]} = call, context) do
+    case {form(left, context), form(right, context)} do
+      {same, same} -> {:ok, [left, right]}
+      {nil, form} -> with {:ok, left} <- as_form(left, form), do: {:ok, [left, right]}
+      {form, nil} -> with {:ok, right} <- as_form(right, form), do: {:ok, [left, right]}
+      _different -> unsupported(call)
+    end
+  end
+
+  # The text form a date or time travels in, as `{kind, precision}`, or nil for anything else.
+  defp form(%Call{name: :now, args: []}, _context), do: {:datetime, :microsecond}
+
+  defp form(operand, context) do
+    with {type, constraints} <- field_type(operand, context) do
+      case resolve(type, constraints) do
+        {Ash.Type.DateTime, constraints} -> {:datetime, constraints[:precision] || :second}
+        {Ash.Type.Time, constraints} -> {:time, constraints[:precision] || :second}
+        {Ash.Type.Date, _constraints} -> :date
+        {Ash.Type.NaiveDatetime, _constraints} -> :naive
+        _other -> nil
+      end
+    end
+  end
+
+  # A new type stores as the type it is a subtype of.
+  defp resolve({:array, _} = type, constraints), do: {type, constraints}
+
+  defp resolve(type, constraints) do
+    type = Ash.Type.get_type(type)
+
+    if Ash.Type.NewType.new_type?(type),
+      do: resolve(Ash.Type.NewType.subtype_of(type), Ash.Type.NewType.constraints(type, constraints)),
+      else: {type, constraints}
+  end
+
+  defp as_form(%DateTime{} = moment, {:datetime, precision}) do
+    utc = moment |> DateTime.to_unix(:microsecond) |> DateTime.from_unix!(:microsecond)
+    at_precision(moment, precision, utc.microsecond, &%{utc | microsecond: &1})
+  end
+
+  defp as_form(%Time{} = moment, {:time, precision}),
+    do: at_precision(moment, precision, moment.microsecond, &%{moment | microsecond: &1})
+
+  defp as_form(%Date{} = moment, :date), do: {:ok, moment}
+  defp as_form(%NaiveDateTime{} = moment, :naive), do: {:ok, moment}
+  defp as_form(%type{} = moment, _form) when type in @temporal_types, do: unsupported(moment)
+  defp as_form(operand, _form), do: {:ok, operand}
+
+  # Text with six fraction digits, or none when the moment has none to lose.
+  defp at_precision(original, :microsecond, {microseconds, _}, put), do: with_text(original, put.({microseconds, 6}))
+  defp at_precision(original, :second, {0, _}, put), do: with_text(original, put.({0, 0}))
+  defp at_precision(original, :second, _fraction, _put), do: unsupported(original)
+
+  defp with_text(%type{}, moment), do: {:ok, type.to_iso8601(moment)}
 
   defp as_number(operand) when is_number(operand) or is_struct(operand, Decimal), do: operand
   defp as_number(operand), do: %Call{name: :+, args: [operand]}
