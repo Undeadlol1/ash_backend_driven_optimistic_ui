@@ -69,4 +69,63 @@ defmodule AshBackendDrivenOptimisticUi.RegistryTest do
       assert Registry.rule_resources([SampleDomain]) == [SampleResource, ListItemResource]
     end
   end
+
+  describe "GIVEN two resources whose rules get the same key" do
+    test "WHEN the rules are collected THEN it raises naming both resources, the key and the way out" do
+      suffix = System.unique_integer([:positive])
+      first = Module.concat([__MODULE__, "First#{suffix}", Item])
+      second = Module.concat([__MODULE__, "Second#{suffix}", Item])
+      domain = Module.concat(__MODULE__, "Domain#{suffix}")
+
+      for resource <- [first, second] do
+        Module.create(
+          resource,
+          quote do
+            use Ash.Resource,
+              domain: SampleDomain,
+              data_layer: Ash.DataLayer.Ets,
+              extensions: [AshBackendDrivenOptimisticUi.Resource]
+
+            optimistic_ui do
+              optimistic :open do
+                set :balance, 1
+              end
+            end
+
+            actions do
+              defaults [:read]
+              update :open
+            end
+
+            attributes do
+              uuid_primary_key :id
+              attribute :balance, :integer, public?: true
+            end
+          end,
+          Macro.Env.location(__ENV__)
+        )
+      end
+
+      Module.create(
+        domain,
+        quote do
+          use Ash.Domain, validate_config_inclusion?: false
+
+          resources do
+            allow_unregistered? true
+            resource unquote(first)
+            resource unquote(second)
+          end
+        end,
+        Macro.Env.location(__ENV__)
+      )
+
+      error = assert_raise ArgumentError, fn -> Registry.rules([domain]) end
+
+      assert error.message =~ inspect(first)
+      assert error.message =~ inspect(second)
+      assert error.message =~ ~s("item.open")
+      assert error.message =~ "JSON:API type"
+    end
+  end
 end
