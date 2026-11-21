@@ -187,11 +187,11 @@ defmodule AshBackendDrivenOptimisticUi.Resource.Verifiers.ValidateRules do
   end
 
   defp expression_problem(dsl_state, expression, arguments) do
-    first_problem(expression, nil, dsl_state, arguments) || compile_problem(expression, arguments)
+    first_problem(expression, nil, dsl_state, arguments) || compile_problem(dsl_state, expression, arguments)
   end
 
-  defp compile_problem(expression, arguments) do
-    case Compiler.compile(expression) do
+  defp compile_problem(dsl_state, expression, arguments) do
+    case Compiler.compile(expression, resource: dsl_state, action: action_name(arguments)) do
       {:ok, _compiled} ->
         nil
 
@@ -203,6 +203,9 @@ defmodule AshBackendDrivenOptimisticUi.Resource.Verifiers.ValidateRules do
 
   defp trigger_name({:action, name, _argument_names}), do: "rule #{inspect(name)}"
   defp trigger_name(:reaction), do: "this reaction"
+
+  defp action_name({:action, name, _argument_names}), do: name
+  defp action_name(:reaction), do: nil
 
   defp first_problem(node, problem, dsl_state, arguments) do
     problem = problem || node_problem(dsl_state, node, arguments)

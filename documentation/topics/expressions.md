@@ -32,7 +32,7 @@ resource.
 | --- | --- |
 | `+ - * /`, unary `-` | the same |
 | `== !=` | the same |
-| `< > <= >=` | the same, each side that is not a number literal cast to a number with `+` |
+| `< > <= >=` | the same, each side that is not a number literal cast to a number with `+`, unless a side is text or a date (then no cast) |
 | `a <> b` | `cat` (nested ones become one), each part that is not a text literal wrapped in `to_string` |
 | `x in list` | `in` |
 | `and`, `or`, `not` | `and`, `or`, `!` |
@@ -50,7 +50,9 @@ text.
 Two rules of the translator keep Ash behaviour on a standard evaluator.
 Compared values are cast to numbers with `+`, because Ash sends decimals as
 text and standard JSON Logic would compare two texts as text (`"10.5"` would
-be smaller than `"9"`). Joined values are wrapped in `to_string`, because
+be smaller than `"9"`). Texts, dates and times compare as text, so nothing is
+cast when a side is a text or date literal or an attribute or argument that
+Ash sends as text. Joined values are wrapped in `to_string`, because
 standard `cat` prints an empty value as `null` and you expect nothing.
 
 Any other function, such as `contains` or `today()`,

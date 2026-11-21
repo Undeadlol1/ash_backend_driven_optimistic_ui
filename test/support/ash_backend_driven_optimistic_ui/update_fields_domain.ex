@@ -7,5 +7,6 @@ defmodule AshBackendDrivenOptimisticUi.TestSupport.UpdateFieldsDomain do
     allow_unregistered? true
     resource AshBackendDrivenOptimisticUi.TestSupport.UpdateFieldsResource
     resource AshBackendDrivenOptimisticUi.TestSupport.ChangeModuleResource
+    resource AshBackendDrivenOptimisticUi.TestSupport.ComparisonResource
   end
 end

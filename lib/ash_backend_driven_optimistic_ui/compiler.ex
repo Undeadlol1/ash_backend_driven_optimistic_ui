@@ -16,7 +16,11 @@ defmodule AshBackendDrivenOptimisticUi.Compiler do
 
   Every compared value that is not a number literal is cast to a number with
   `+`, because Ash sends decimals as text and standard JSON Logic would
-  compare two such texts as text (`"10.5" >= "9"` is false). Every joined
+  compare two such texts as text (`"10.5" >= "9"` is false). The cast is left
+  out when either side is known to be text: a text literal, a date or time
+  literal (compiled to its ISO 8601 text), or, when `compile/2` is given the
+  resource (and the action, for arguments), an attribute or argument of a type
+  Ash sends as text (string, atom, date, datetime, time, uuid). Every joined
   value that is not a text literal is wrapped in `to_string`, because
   standard `cat` prints an empty value as `null` and an Ash developer expects
   nothing.
@@ -37,6 +41,7 @@ defmodule AshBackendDrivenOptimisticUi.Compiler do
   alias Ash.Query.Call
   alias Ash.Query.Not
   alias Ash.Query.Ref
+  alias Ash.Resource.Info
 
   @operators %{
     +: "+",
@@ -55,6 +60,21 @@ defmodule AshBackendDrivenOptimisticUi.Compiler do
 
   @comparisons [:<, :>, :<=, :>=]
 
+  @temporal_types [Date, DateTime, NaiveDateTime, Time]
+
+  # The Ash types whose values travel as text.
+  @text_types [
+    Ash.Type.String,
+    Ash.Type.CiString,
+    Ash.Type.Atom,
+    Ash.Type.Date,
+    Ash.Type.UtcDatetime,
+    Ash.Type.UtcDatetimeUsec,
+    Ash.Type.NaiveDatetime,
+    Ash.Type.Time,
+    Ash.Type.UUID
+  ]
+
   @custom_functions %{
     {:abs, 1} => "abs",
     {:round, 1} => "round",
@@ -66,70 +86,83 @@ defmodule AshBackendDrivenOptimisticUi.Compiler do
   @type json_logic ::
           number() | String.t() | boolean() | nil | [json_logic()] | %{String.t() => json_logic()}
 
-  @doc "Compiles `expression`, or names the first node the client cannot run."
-  @spec compile(term()) :: {:ok, json_logic()} | {:error, {:unsupported, term()}}
-  def compile(%Call{name: :<>, args: [_, _]} = concatenation) do
-    operation("cat", concatenation |> flatten_cat() |> Enum.map(&as_text/1))
+  @doc """
+  Compiles `expression`, or names the first node the client cannot run.
+
+  Options: `resource:` (a resource, or the DSL state of one being built) and
+  `action:` (an action name) let the compiler read the types of the attributes
+  and arguments the expression names, so it can tell a text comparison from a
+  number comparison.
+  """
+  @spec compile(term(), keyword()) :: {:ok, json_logic()} | {:error, {:unsupported, term()}}
+  def compile(expression, opts \\ []), do: node(expression, Map.new(opts))
+
+  defp node(%Call{name: :<>, args: [_, _]} = concatenation, context) do
+    operation("cat", concatenation |> flatten_cat() |> Enum.map(&as_text/1), context)
   end
 
-  def compile(%Call{name: name, args: args}) when name in @comparisons and length(args) == 2 do
-    operation(@operators[name], Enum.map(args, &as_number/1))
+  defp node(%Call{name: name, args: [left, right]}, context) when name in @comparisons do
+    operands =
+      if text?(left, context) or text?(right, context), do: [left, right], else: [as_number(left), as_number(right)]
+
+    operation(@operators[name], operands, context)
   end
 
-  def compile(%Call{name: name, args: args}) when is_map_key(@operators, name) and length(args) in [1, 2] do
-    operation(@operators[name], args)
+  defp node(%Call{name: name, args: args}, context) when is_map_key(@operators, name) and length(args) in [1, 2] do
+    operation(@operators[name], args, context)
   end
 
-  def compile(%Call{name: :if, args: [condition, branches]}) when is_list(branches) do
-    operation("if", [condition, Keyword.get(branches, :do), Keyword.get(branches, :else)])
+  defp node(%Call{name: :if, args: [condition, branches]}, context) when is_list(branches) do
+    operation("if", [condition, Keyword.get(branches, :do), Keyword.get(branches, :else)], context)
   end
 
-  def compile(%Call{name: :if, args: [_condition, _then, _else] = args}), do: operation("if", args)
+  defp node(%Call{name: :if, args: [_condition, _then, _else] = args}, context), do: operation("if", args, context)
 
-  def compile(%Call{name: :is_nil, args: [value]}), do: operation("==", [value, nil])
-  def compile(%Call{name: :arg, args: [name]}), do: compile({:_arg, name})
+  defp node(%Call{name: :is_nil, args: [value]}, context), do: operation("==", [value, nil], context)
+  defp node(%Call{name: :arg, args: [name]}, context), do: node({:_arg, name}, context)
 
-  def compile(%Call{name: :has_arg, args: [name]}) when is_atom(name), do: {:ok, %{"has" => "input.#{name}"}}
+  defp node(%Call{name: :has_arg, args: [name]}, _context) when is_atom(name), do: {:ok, %{"has" => "input.#{name}"}}
 
-  def compile(%Call{name: :event, args: [key]}) when is_atom(key) or is_binary(key), do: variable("event.#{key}")
+  defp node(%Call{name: :event, args: [key]}, _context) when is_atom(key) or is_binary(key), do: variable("event.#{key}")
 
-  def compile(%Call{name: name, args: args} = call) do
+  defp node(%Call{name: name, args: args} = call, context) do
     case Map.fetch(@custom_functions, {name, length(args)}) do
-      {:ok, operator} -> operation(operator, args)
+      {:ok, operator} -> operation(operator, args, context)
       :error -> unsupported(call)
     end
   end
 
-  def compile(%BooleanExpression{op: operator} = expression) do
-    operation(Atom.to_string(operator), flatten(expression, operator))
+  defp node(%BooleanExpression{op: operator} = expression, context) do
+    operation(Atom.to_string(operator), flatten(expression, operator), context)
   end
 
-  def compile(%Not{expression: expression}), do: operation("!", [expression])
+  defp node(%Not{expression: expression}, context), do: operation("!", [expression], context)
 
-  def compile(%Ref{attribute: attribute, relationship_path: []}) when is_atom(attribute) do
+  defp node(%Ref{attribute: attribute, relationship_path: []}, _context) when is_atom(attribute) do
     variable("record.#{attribute}")
   end
 
-  def compile({:_arg, name}), do: variable("input.#{name}")
-  def compile({:_context, path}) when is_list(path), do: variable("ctx." <> Enum.join(path, "."))
-  def compile({:_context, name}) when is_atom(name), do: variable("ctx.#{name}")
-  def compile(%Decimal{} = decimal), do: {:ok, Decimal.to_float(decimal)}
+  defp node({:_arg, name}, _context), do: variable("input.#{name}")
+  defp node({:_context, path}, _context) when is_list(path), do: variable("ctx." <> Enum.join(path, "."))
+  defp node({:_context, name}, _context) when is_atom(name), do: variable("ctx.#{name}")
+  defp node(%Decimal{} = decimal, _context), do: {:ok, Decimal.to_float(decimal)}
+  defp node(%type{} = moment, _context) when type in @temporal_types, do: {:ok, type.to_iso8601(moment)}
 
-  def compile(literal) when is_number(literal) or is_binary(literal) or is_boolean(literal) or is_nil(literal),
+  defp node(literal, _context) when is_number(literal) or is_binary(literal) or is_boolean(literal) or is_nil(literal),
     do: {:ok, literal}
 
-  def compile(atom) when is_atom(atom), do: {:ok, Atom.to_string(atom)}
-  def compile(list) when is_list(list), do: compile_all(list)
-  def compile(node), do: unsupported(node)
+  defp node(atom, _context) when is_atom(atom), do: {:ok, Atom.to_string(atom)}
+  defp node(list, context) when is_list(list), do: compile_all(list, context)
+  defp node(other, _context), do: unsupported(other)
 
-  defp operation(operator, operands) do
-    with {:ok, compiled} <- compile_all(operands), do: {:ok, %{operator => compiled}}
+  defp operation(operator, operands, context) do
+    with {:ok, compiled} <- compile_all(operands, context), do: {:ok, %{operator => compiled}}
   end
 
-  defp compile_all(terms) do
+  defp compile_all(terms, context) do
     terms
     |> Enum.reduce_while({:ok, []}, fn term, {:ok, compiled} ->
-      case compile(term) do
+      case node(term, context) do
         {:ok, value} -> {:cont, {:ok, [value | compiled]}}
         error -> {:halt, error}
       end
@@ -139,6 +172,27 @@ defmodule AshBackendDrivenOptimisticUi.Compiler do
       error -> error
     end
   end
+
+  # An operand that is known to travel as text, so a comparison of it is a text comparison.
+  defp text?(operand, _context) when is_binary(operand), do: true
+  defp text?(%type{}, _context) when type in @temporal_types, do: true
+
+  defp text?(%Ref{attribute: name, relationship_path: []}, %{resource: resource}),
+    do: text_type?(Info.attribute(resource, name))
+
+  defp text?(%Call{name: :arg, args: [name]}, context), do: text?({:_arg, name}, context)
+  defp text?({:_arg, name}, %{resource: _resource, action: _action} = context), do: text_type?(argument(context, name))
+  defp text?(_operand, _context), do: false
+
+  defp argument(%{resource: resource, action: action}, name) do
+    with %{arguments: arguments} = action <- Info.action(resource, action) do
+      Enum.find(arguments, &(&1.name == name)) ||
+        (name in (Map.get(action, :accept) || []) && Info.attribute(resource, name))
+    end
+  end
+
+  defp text_type?(%{type: type}), do: Ash.Type.get_type(type) in @text_types
+  defp text_type?(_missing), do: false
 
   defp as_number(operand) when is_number(operand) or is_struct(operand, Decimal), do: operand
   defp as_number(operand), do: %Call{name: :+, args: [operand]}

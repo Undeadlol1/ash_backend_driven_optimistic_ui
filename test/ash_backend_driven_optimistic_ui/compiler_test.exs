@@ -6,6 +6,7 @@ defmodule AshBackendDrivenOptimisticUi.CompilerTest do
 
   alias Ash.Query.Call
   alias AshBackendDrivenOptimisticUi.Compiler
+  alias AshBackendDrivenOptimisticUi.TestSupport.ComparisonResource
 
   describe "GIVEN the optimistic UI compiler WHEN an arithmetic or comparison expression is compiled" do
     test "THEN each operator maps to the same-named json logic operator" do
@@ -35,6 +36,35 @@ defmodule AshBackendDrivenOptimisticUi.CompilerTest do
                {:ok, %{">=" => [%{"+" => [record(:a)]}, %{"+" => [input(:b)]}]}}
 
       assert Compiler.compile(expr(1 < a)) == {:ok, %{"<" => [1, %{"+" => [record(:a)]}]}}
+    end
+
+    test "THEN a comparison with a text literal is not cast" do
+      assert Compiler.compile(expr(a < "m")) == {:ok, %{"<" => [record(:a), "m"]}}
+      assert Compiler.compile(expr("m" >= a)) == {:ok, %{">=" => ["m", record(:a)]}}
+    end
+
+    test "THEN a comparison with a date or time literal compares its ISO 8601 text" do
+      assert Compiler.compile(expr(a < ^~D[2000-01-01])) == {:ok, %{"<" => [record(:a), "2000-01-01"]}}
+      assert Compiler.compile(expr(a < ^~T[10:30:00])) == {:ok, %{"<" => [record(:a), "10:30:00"]}}
+      assert Compiler.compile(expr(a < ^~N[2000-01-01 10:30:00])) == {:ok, %{"<" => [record(:a), "2000-01-01T10:30:00"]}}
+
+      assert Compiler.compile(expr(a < ^~U[2000-01-01 10:30:00Z])) ==
+               {:ok, %{"<" => [record(:a), "2000-01-01T10:30:00Z"]}}
+    end
+
+    test "THEN attributes and arguments that travel as text are not cast when the resource is given" do
+      opts = [resource: ComparisonResource, action: :born_before_cutoff]
+
+      assert Compiler.compile(expr(name < name), opts) == {:ok, %{"<" => [record(:name), record(:name)]}}
+      assert Compiler.compile(expr(born_on < arg(:cutoff)), opts) == {:ok, %{"<" => [record(:born_on), input(:cutoff)]}}
+      assert Compiler.compile(expr(arg(:cutoff) >= 1), opts) == {:ok, %{">=" => [input(:cutoff), 1]}}
+    end
+
+    test "THEN number and decimal attributes keep the cast when the resource is given" do
+      opts = [resource: ComparisonResource, action: :born_before_cutoff]
+
+      assert Compiler.compile(expr(score < amount), opts) ==
+               {:ok, %{"<" => [%{"+" => [record(:score)]}, %{"+" => [record(:amount)]}]}}
     end
 
     test "THEN nested concatenation flattens into one cat list" do

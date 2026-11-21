@@ -127,7 +127,7 @@ defmodule AshBackendDrivenOptimisticUi.Rules do
   defp with_id(payload, event, label), do: Map.put(payload, "id", %{"var" => PushId.variable(event, label)})
 
   defp compile!(expression, resource, trigger, from \\ nil) do
-    case Compiler.compile(expression) do
+    case Compiler.compile(expression, resource: resource, action: trigger) do
       {:ok, compiled} ->
         compiled
 
