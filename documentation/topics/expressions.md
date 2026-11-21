@@ -31,10 +31,10 @@ resource.
 | You write | The client runs |
 | --- | --- |
 | `+ - * /`, unary `-` | the same |
-| `== !=` | the same |
+| `== !=` | the same, after a check that the sides that are not literals are not null (Ash gives nil, so false, when a side is nil) |
 | `< > <= >=` | the same, each side that is not a number literal cast to a number with `+`, unless a side is text or a date (then no cast) |
 | `a <> b` | `cat` (nested ones become one), each part that is not a text literal wrapped in `to_string` |
-| `x in list` | `in` |
+| `x in list` | `in`, after the same null check |
 | `and`, `or`, `not` | `and`, `or`, `!` |
 | `if(cond, then: a, else: b)` | `if` |
 | `is_nil(x)` | `x == nil` |

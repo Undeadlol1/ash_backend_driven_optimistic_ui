@@ -14,6 +14,11 @@ defmodule AshBackendDrivenOptimisticUi.Compiler do
   key, even with a null value, so a rule can leave alone a field the caller
   did not send.
 
+  In Ash, `==`, `!=` and `in` are nil (falsy) when a side is nil, where JSON
+  Logic says `nil != 5` is true. So each of them first checks, with `and`,
+  that the sides that are not literals are `!= null` (for `==`, only when
+  neither side is a literal).
+
   Every compared value that is not a number literal is cast to a number with
   `+`, because Ash sends decimals as text and standard JSON Logic would
   compare two such texts as text (`"10.5" >= "9"` is false). The cast is left
@@ -108,6 +113,18 @@ defmodule AshBackendDrivenOptimisticUi.Compiler do
     operation(@operators[name], operands, context)
   end
 
+  # In Ash these are nil, which is falsy, when a side is nil; JSON Logic would say `nil != 5`.
+  defp node(%Call{name: name, args: [_left, _right] = operands}, context) when name in [:==, :!=, :in] do
+    to_check = Enum.reject(operands, &literal?/1)
+    to_check = if name == :== and length(to_check) < 2, do: [], else: to_check
+
+    with {:ok, comparison} <- operation(@operators[name], operands, context),
+         {:ok, compiled} <- compile_all(to_check, context) do
+      checks = Enum.map(compiled, &%{"!=" => [&1, nil]})
+      if checks == [], do: {:ok, comparison}, else: {:ok, %{"and" => checks ++ [comparison]}}
+    end
+  end
+
   defp node(%Call{name: name, args: args}, context) when is_map_key(@operators, name) and length(args) in [1, 2] do
     operation(@operators[name], args, context)
   end
@@ -172,6 +189,10 @@ defmodule AshBackendDrivenOptimisticUi.Compiler do
       error -> error
     end
   end
+
+  defp literal?(list) when is_list(list), do: Enum.all?(list, &literal?/1)
+  defp literal?(%type{}) when type in [Decimal | @temporal_types], do: true
+  defp literal?(operand), do: is_number(operand) or is_atom(operand) or is_binary(operand)
 
   # An operand that is known to travel as text, so a comparison of it is a text comparison.
   defp text?(operand, _context) when is_binary(operand), do: true

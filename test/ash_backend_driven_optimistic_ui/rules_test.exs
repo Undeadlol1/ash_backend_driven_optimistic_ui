@@ -221,7 +221,12 @@ defmodule AshBackendDrivenOptimisticUi.RulesTest do
                    "where" => %{"==" => [record(:title), nil]},
                    "effects" => [
                      %{
-                       "where" => %{"!=" => [%{"var" => "event.title"}, ""]},
+                       "where" => %{
+                         "and" => [
+                           %{"!=" => [%{"var" => "event.title"}, nil]},
+                           %{"!=" => [%{"var" => "event.title"}, ""]}
+                         ]
+                       },
                        "effects" => [
                          %{
                            "set" => %{"title" => %{"var" => "event.title"}},

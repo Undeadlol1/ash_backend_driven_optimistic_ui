@@ -8,6 +8,8 @@ defmodule AshBackendDrivenOptimisticUi.CompilerTest do
   alias AshBackendDrivenOptimisticUi.Compiler
   alias AshBackendDrivenOptimisticUi.TestSupport.ComparisonResource
 
+  defp present(name), do: %{"!=" => [record(name), nil]}
+
   describe "GIVEN the optimistic UI compiler WHEN an arithmetic or comparison expression is compiled" do
     test "THEN each operator maps to the same-named json logic operator" do
       assert Compiler.compile(expr(a + 1)) == {:ok, %{"+" => [record(:a), 1]}}
@@ -15,7 +17,7 @@ defmodule AshBackendDrivenOptimisticUi.CompilerTest do
       assert Compiler.compile(expr(a * 2)) == {:ok, %{"*" => [record(:a), 2]}}
       assert Compiler.compile(expr(a / 2)) == {:ok, %{"/" => [record(:a), 2]}}
       assert Compiler.compile(expr(a == 1)) == {:ok, %{"==" => [record(:a), 1]}}
-      assert Compiler.compile(expr(a != 1)) == {:ok, %{"!=" => [record(:a), 1]}}
+      assert Compiler.compile(expr(a != 1)) == {:ok, %{"and" => [present(:a), %{"!=" => [record(:a), 1]}]}}
       assert Compiler.compile(expr(a < 1)) == {:ok, %{"<" => [%{"+" => [record(:a)]}, 1]}}
       assert Compiler.compile(expr(a > 1)) == {:ok, %{">" => [%{"+" => [record(:a)]}, 1]}}
       assert Compiler.compile(expr(a <= 1)) == {:ok, %{"<=" => [%{"+" => [record(:a)]}, 1]}}
@@ -82,8 +84,24 @@ defmodule AshBackendDrivenOptimisticUi.CompilerTest do
                {:ok, %{"+" => [record(:a), %{"var" => "event.amount"}]}}
     end
 
-    test "THEN membership becomes in with the list compiled" do
-      assert Compiler.compile(expr(a in [1, 2])) == {:ok, %{"in" => [record(:a), [1, 2]]}}
+    test "THEN membership becomes in with the list compiled, after a check that the value is not nil" do
+      assert Compiler.compile(expr(a in [1, 2])) ==
+               {:ok, %{"and" => [present(:a), %{"in" => [record(:a), [1, 2]]}]}}
+    end
+
+    test "THEN == checks both sides for nil only when neither is a literal" do
+      assert Compiler.compile(expr(a == b)) ==
+               {:ok, %{"and" => [present(:a), present(:b), %{"==" => [record(:a), record(:b)]}]}}
+
+      assert Compiler.compile(expr(a == "x")) == {:ok, %{"==" => [record(:a), "x"]}}
+      assert Compiler.compile(expr(a == nil)) == {:ok, %{"==" => [record(:a), nil]}}
+    end
+
+    test "THEN != checks only the sides that are not literals" do
+      assert Compiler.compile(expr(a != b)) ==
+               {:ok, %{"and" => [present(:a), present(:b), %{"!=" => [record(:a), record(:b)]}]}}
+
+      assert Compiler.compile(expr(1 != 2)) == {:ok, %{"!=" => [1, 2]}}
     end
   end
 
