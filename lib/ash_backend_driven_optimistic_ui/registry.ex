@@ -71,6 +71,7 @@ defmodule AshBackendDrivenOptimisticUi.Registry do
     for domain <- domains,
         resource <- DomainInfo.resources(domain),
         Resource in Spark.extensions(resource),
+        uniq: true,
         do: resource
   end
 
@@ -88,7 +89,7 @@ defmodule AshBackendDrivenOptimisticUi.Registry do
   defp duplicate_key(key, first, second) do
     ArgumentError.exception(
       "#{inspect(first)} and #{inspect(second)} both produce the rule key #{inspect(key)}; " <>
-        "give one of them a different JSON:API type so their keys differ"
+        "the two resources need different type names; a JSON:API type is one way to give one"
     )
   end
 

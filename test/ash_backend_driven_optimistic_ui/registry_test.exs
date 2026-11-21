@@ -70,6 +70,12 @@ defmodule AshBackendDrivenOptimisticUi.RegistryTest do
     end
   end
 
+  describe "GIVEN a domain listed twice" do
+    test "WHEN the rules are collected THEN each resource counts once and nothing raises" do
+      assert Registry.rules([SampleDomain, SampleDomain]) == Registry.rules([SampleDomain])
+    end
+  end
+
   describe "GIVEN two resources whose rules get the same key" do
     test "WHEN the rules are collected THEN it raises naming both resources, the key and the way out" do
       suffix = System.unique_integer([:positive])
@@ -125,6 +131,7 @@ defmodule AshBackendDrivenOptimisticUi.RegistryTest do
       assert error.message =~ inspect(first)
       assert error.message =~ inspect(second)
       assert error.message =~ ~s("item.open")
+      assert error.message =~ "different type names"
       assert error.message =~ "JSON:API type"
     end
   end
