@@ -5,26 +5,17 @@ the moment the user taps, using rules you write once, on the server.
 
 ## The problem
 
-A user adds a todo. The app sends it to the server, waits for the answer,
-and only then shows the new row. On a phone that wait can be a second
-after every tap.
+A user adds a todo. The app waits for the server's answer before it shows
+the row: on a phone, up to a second after every tap. Showing the row first
+means the app needs the server's rules, written twice, and the two copies
+drift apart.
 
-The usual fix is to show the row first and save it after. But then the
-app has to know the server's rules: where the row goes, what else
-changes. The rules get written twice, once on the server and once in the
-app, and the two drift apart.
-
-## What this library does
-
-You write the rule next to the Ash action. The app downloads the rules
-and applies one when the user taps. After the save, the server sends the
-real data and the app keeps that.
-
-- The change is on screen before the server answers.
-- The rules live on the server. Change an action and every app gets the
-  new rule without an app release.
-- The server has the last word. If the save fails, or the server did
-  something different, the app shows the server's data.
+You write the rule next to the Ash action instead. The app downloads the
+rules and applies one when the user taps. After the save, the server
+sends the real data and the app keeps that. The rules live on the server,
+so a changed action reaches every app without an app release. If the save
+fails, or the server did something different, the app shows the server's
+data.
 
 ## Example
 
@@ -190,25 +181,8 @@ For actions whose result the app can't know in advance.
 More rules, with explanations, are in
 [Examples](documentation/topics/examples.md).
 
-## What you don't write twice
-
-- The fields an action accepts, and an action's `atomic_update` and
-  `set_attribute` changes, become the rule by themselves. You only write
-  what the action can't say.
-- A change module can say once what it does to the data. Every action
-  that uses it gets that `set`
-  ([example](documentation/topics/examples.md)).
-- A reaction is one block. "The user level adds the XP" is one
-  `on :xp_awarded`, and every rule that gives XP uses it.
-- The toast the app shows early and the one the server sends get their id
-  from the same function, so the app can tell they are the same.
-- One helper runs the real action and checks the rule against it. One
-  test with `assert_snapshots_current()` covers every rule's snapshot.
-
-You do write one thing twice: a `push` repeats the name and fields of the
-event your notifier sends. The test helper fails if the name, the id or a
-field doesn't match. Details:
-[What is written once](documentation/topics/how-it-works.md#what-is-written-once).
+One thing you still write twice, a `push`'s name and fields:
+[How it works](documentation/topics/how-it-works.md#what-is-still-written-twice).
 
 ## Limits
 
