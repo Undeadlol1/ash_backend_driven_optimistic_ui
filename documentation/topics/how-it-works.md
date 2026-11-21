@@ -88,8 +88,8 @@ action name, a `set` on something that is not an attribute, or an
 expression the app could not run (a relationship, the actor, an
 unsupported function) stops the compile.
 
-Simple changes on the action are turned into `set`s for you: the fields a
-create accepts, `atomic_update`, `set_attribute`, and change modules
+Simple changes on the action are turned into `set`s for you: the fields the
+action accepts, `atomic_update`, `set_attribute`, and change modules
 that describe themselves. See
 [What a rule may read](expressions.md#what-is-taken-from-the-action).
 

@@ -10,7 +10,7 @@ compilation fails with a message that names the action.
 | In the expression | Reads | Where |
 | --- | --- | --- |
 | `balance` | an attribute, calculation or aggregate of the same resource | `optimistic` and `on` |
-| `arg(:cost)` | an argument of the action, or an attribute a create accepts | `optimistic` only |
+| `arg(:cost)` | an argument of the action, or an attribute the action accepts | `optimistic` only |
 | `^context(:key)` | a field of the record's `ctx` map, which the server fills (see [`ctx`](how-it-works.md#ctx)) | `optimistic` and `on` |
 | `event(:key)` | a field of the pushed event | `on` only |
 | `has_arg(:name)` | whether the input carries that key | `optimistic` only |
@@ -86,6 +86,12 @@ action:
 - For a create, every attribute in `accept` becomes `set attr, arg(attr)`, or
   the attribute's literal default when the input omits it. An attribute with a
   computed default is set only when the input carries it.
+- For an update, every attribute in `accept` becomes the same set, inside
+  `where expr(has_arg(attr))`: an update changes a field only when the input
+  carries it.
+- The options of `set_attribute` are followed: `new?: true` on a create takes
+  the sent value, else the given one (on an update it is skipped), and
+  `set_when_nil?: false` applies the set only when the value is not nil.
 
 Derived sets are marked `"source": "derived"` in the rule, declared ones
 `"declared"`. Changes that are a function or a module without `optimistic_sets/1`, and changes with a
