@@ -5,17 +5,26 @@ the moment the user taps, using rules you write once, on the server.
 
 ## The problem
 
-A user adds a todo. The app waits for the server's answer before it shows
-the row: on a phone, up to a second after every tap. Showing the row first
-means the app needs the server's rules, written twice, and the two copies
-drift apart.
+A user adds a todo. The app sends it to the server, waits for the answer,
+and only then shows the new row. On a phone that wait can be a second
+after every tap.
 
-You write the rule next to the Ash action instead. The app downloads the
-rules and applies one when the user taps. After the save, the server
-sends the real data and the app keeps that. The rules live on the server,
-so a changed action reaches every app without an app release. If the save
-fails, or the server did something different, the app shows the server's
-data.
+The usual fix is to show the row first and save it after. But then the
+app has to know the server's rules: where the row goes, what else
+changes. The rules get written twice, once on the server and once in the
+app, and the two drift apart.
+
+## What this library does
+
+You write the rule next to the Ash action. The app downloads the rules
+and applies one when the user taps. After the save, the server sends the
+real data and the app keeps that.
+
+- The change is on screen before the server answers.
+- The rules live on the server. Change an action and every app gets the
+  new rule without an app release.
+- The server has the last word. If the save fails, or the server did
+  something different, the app shows the server's data.
 
 ## Example
 
